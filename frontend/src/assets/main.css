@@ -1,0 +1,42 @@
+@import './base.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Remove o max-width e padding do scaffold do create-vue.
+   O layout é gerenciado 100% pelo Tailwind. */
+#app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Customização Global da Barra de Rolagem (Scrollbar) ── */
+
+/* Padrão para Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent; /* Corresponde ao slate-300 do Tailwind */
+}
+
+/* Padrão para Chrome, Edge e Safari (Webkit) */
+::-webkit-scrollbar {
+  width: 8px;  /* Largura sutil para o scroll vertical */
+  height: 8px; /* Altura sutil para o scroll horizontal */
+}
+
+::-webkit-scrollbar-track {
+  background: transparent; /* Deixa a trilha invisível, mesclando com o fundo */
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1; /* Cor sólida e discreta (slate-300) */
+  border-radius: 10px;       /* Bordas totalmente arredondadas */
+  border: 2px solid transparent; /* Cria um "padding" falso para afinar visualmente */
+  background-clip: content-box;  /* Impede que o fundo vaze para a borda transparente */
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8; /* Escurece levemente ao passar o mouse (slate-400) */
+}

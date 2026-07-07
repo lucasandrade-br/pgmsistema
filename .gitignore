@@ -1,0 +1,145 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# BACKEND — Python / Django
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Ambiente virtual
+backend/venv/
+backend/.venv/
+backend/env/
+backend/.env/
+
+# Bytecode Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# Distribuição / empacotamento
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Cobertura de testes
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+nosetests.xml
+coverage.xml
+*.cover
+
+# Variáveis de ambiente (NUNCA subir para o repositório)
+.env
+.env.*
+!.env.example
+
+# Banco de dados SQLite local
+*.sqlite3
+db.sqlite3
+
+# Arquivos de mídia enviados pelos usuários
+backend/media/
+
+# Logs
+backend/logs/
+*.log
+
+# Arquivos estáticos coletados (collectstatic)
+backend/staticfiles/
+backend/static_root/
+
+# Configurações locais (overrides de settings)
+backend/config/local_settings.py
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# IDEs
+.idea/
+*.iml
+
+# ──────────────────────────────────────────────────────────────────────────────
+# FRONTEND — Node.js / Vue / Vite
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Dependências Node
+frontend/node_modules/
+
+# Build gerado pelo Vite
+frontend/dist/
+frontend/dist-ssr/
+
+# Cache do Vite
+frontend/.vite/
+
+# Variáveis de ambiente do frontend
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# Logs NPM / PNPM / Yarn
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Lock files alternativos (manter apenas um)
+# Descomente a linha do gerenciador que você NÃO usa:
+# frontend/yarn.lock
+# frontend/pnpm-lock.yaml
+
+# ──────────────────────────────────────────────────────────────────────────────
+# SISTEMA OPERACIONAL
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Linux
+*~
+
+# ──────────────────────────────────────────────────────────────────────────────
+# EDITORES / IDEs
+# ──────────────────────────────────────────────────────────────────────────────
+
+.vscode/settings.json
+.vscode/launch.json
+.vscode/*.code-workspace
+!.vscode/extensions.json
+
+.idea/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# ──────────────────────────────────────────────────────────────────────────────
+# DIVERSOS
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Backups manuais
+backend/backups/
+*.bak
+*.tmp
+
+# Certificados locais
+*.pem
+*.key
+*.crt

@@ -1,0 +1,298 @@
+from django.conf import settings
+from django.db import models
+
+from cadastros.models import NivelPrioridade, Remetente, TipoDocumento
+
+
+class Processo(models.Model):
+    class Status(models.TextChoices):
+        AGUARDANDO_DISTRIBUICAO = "AGUARDANDO_DISTRIBUICAO", "Aguardando Distribuição"
+        DEVOLVIDO = "DEVOLVIDO", "Devolvido"
+        EM_ANALISE = "EM_ANALISE", "Em Análise"
+        EM_DILIGENCIA = "EM_DILIGENCIA", "Em Diligência"
+        CONCLUIDO = "CONCLUIDO", "Concluído"
+        ARQUIVADO = "ARQUIVADO", "Arquivado"
+        REJEITADO = "REJEITADO", "Rejeitado"
+
+    numero_protocolo = models.CharField(
+        max_length=50,
+        unique=True,
+        verbose_name="Número de Protocolo",
+    )
+    status = models.CharField(
+        max_length=30,
+        choices=Status.choices,
+        default=Status.AGUARDANDO_DISTRIBUICAO,
+        verbose_name="Status",
+    )
+    prioridade = models.ForeignKey(
+        NivelPrioridade,
+        on_delete=models.PROTECT,
+        related_name="processos",
+        verbose_name="Prioridade",
+    )
+    remetente = models.ForeignKey(
+        Remetente,
+        on_delete=models.PROTECT,
+        related_name="processos_como_remetente",
+        verbose_name="Remetente",
+    )
+    interessados = models.ManyToManyField(
+        Remetente,
+        blank=True,
+        related_name="processos_como_interessado",
+        verbose_name="Interessados",
+    )
+    procurador_atribuido = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="processos_atribuidos",
+        verbose_name="Procurador Atribuído",
+    )
+    data_limite = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="Data Limite",
+    )
+    data_atribuicao = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Data de Atribuição",
+    )
+    # ── Campos operacionais adicionados no Hotfix Sprint 5 ────────────────────
+    tipo_processo = models.ForeignKey(
+        TipoDocumento,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="processos_tipo",
+        verbose_name="Tipo de Processo",
+    )
+    numero_origem = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        verbose_name="Número de Origem",
+    )
+    numero_sei = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        verbose_name="Número SEI",
+    )
+    data_origem = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="Data de Origem",
+    )
+    observacoes = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Observações",
+    )
+    notificar_remetente = models.BooleanField(
+        default=False,
+        verbose_name="Notificar Remetente",
+    )
+
+    class Meta:
+        verbose_name = "Processo"
+        verbose_name_plural = "Processos"
+        ordering = ["-id"]
+
+    def __str__(self):
+        return f"Processo {self.numero_protocolo} [{self.get_status_display()}]"
+
+
+class Movimentacao(models.Model):
+    """
+    Eixo central da Timeline. Cada registro representa um evento
+    imutável na vida de um Processo, seguindo o padrão Event Sourcing.
+    """
+
+    class TipoEvento(models.TextChoices):
+        PROTOCOLO = "PROTOCOLO", "Protocolo"
+        DISTRIBUICAO = "DISTRIBUICAO", "Distribuição"
+        CONCLUSAO = "CONCLUSAO", "Conclusão"
+        REJEICAO = "REJEICAO", "Rejeição"
+        DILIGENCIA_INICIADA = "DILIGENCIA_INICIADA", "Diligência Iniciada"
+        DILIGENCIA_RESOLVIDA = "DILIGENCIA_RESOLVIDA", "Diligência Resolvida"
+        ARQUIVAMENTO = "ARQUIVAMENTO", "Arquivamento"
+        DESARQUIVAMENTO = "DESARQUIVAMENTO", "Desarquivamento"
+        DEVOLUCAO = "DEVOLUCAO", "Devolução"
+        ANEXO_ARQUIVO = "ANEXO_ARQUIVO", "Anexo de Arquivo"
+        OBSERVACAO_SIMPLES = "OBSERVACAO_SIMPLES", "Observação Simples"
+
+    processo = models.ForeignKey(
+        Processo,
+        on_delete=models.CASCADE,
+        related_name="movimentacoes",
+        verbose_name="Processo",
+    )
+    tipo_evento = models.CharField(
+        max_length=30,
+        choices=TipoEvento.choices,
+        verbose_name="Tipo de Evento",
+    )
+    usuario_responsavel = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="movimentacoes",
+        verbose_name="Usuário Responsável",
+    )
+    data_criacao = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Data de Criação",
+    )
+    descricao = models.TextField(
+        null=True,
+        blank=True,
+        verbose_name="Descrição / Despacho / Motivo",
+    )
+
+    class Meta:
+        verbose_name = "Movimentação"
+        verbose_name_plural = "Movimentações"
+        ordering = ["data_criacao"]
+
+    def __str__(self):
+        return (
+            f"{self.get_tipo_evento_display()} — "
+            f"Processo {self.processo.numero_protocolo} "
+            f"em {self.data_criacao:%d/%m/%Y %H:%M}"
+        )
+
+
+class Anexo(models.Model):
+    class TipoAnexo(models.TextChoices):
+        INICIAL    = "INICIAL",    "Inicial"
+        RESPOSTA   = "RESPOSTA",   "Resposta"
+        DILIGENCIA = "DILIGENCIA", "Diligência"
+        OUTROS     = "OUTROS",     "Outros"
+
+    movimentacao = models.ForeignKey(
+        Movimentacao,
+        on_delete=models.CASCADE,
+        related_name="anexos",
+        verbose_name="Movimentação",
+    )
+    arquivo = models.FileField(
+        upload_to="anexos/",
+        null=True,
+        blank=True,
+        verbose_name="Arquivo",
+    )
+    tipo_anexo = models.CharField(
+        max_length=20,
+        choices=TipoAnexo.choices,
+        verbose_name="Tipo de Anexo",
+    )
+    tipo_documento = models.ForeignKey(
+        TipoDocumento,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="anexos",
+        verbose_name="Tipo de Documento",
+    )
+    numero_documento = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        verbose_name="Número do Documento",
+    )
+    ativo = models.BooleanField(
+        default=True,
+        verbose_name="Ativo",
+    )
+    # ── Campos operacionais adicionados no Hotfix Sprint 5 ────────────────────
+    processo = models.ForeignKey(
+        Processo,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="anexos",
+        verbose_name="Processo (acesso direto)",
+    )
+    observacao = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Observação",
+    )
+
+    class Meta:
+        verbose_name = "Anexo"
+        verbose_name_plural = "Anexos"
+
+    def __str__(self):
+        nome_arquivo = self.arquivo.name if self.arquivo else "sem arquivo"
+        return f"Anexo [{self.get_tipo_anexo_display()}] — {nome_arquivo}"
+
+
+class SolicitacaoDocumento(models.Model):
+    """Representa uma Diligência: solicitação formal de documentação adicional."""
+
+    class Status(models.TextChoices):
+        PENDENTE = "PENDENTE", "Pendente"
+        ENVIADA = "ENVIADA", "Enviada"
+        ATENDIDA = "ATENDIDA", "Atendida"
+        REJEITADA = "REJEITADA", "Rejeitada"
+
+    processo = models.ForeignKey(
+        Processo,
+        on_delete=models.CASCADE,
+        related_name="solicitacoes_documento",
+        verbose_name="Processo",
+    )
+    movimentacao_origem = models.ForeignKey(
+        Movimentacao,
+        on_delete=models.PROTECT,
+        related_name="solicitacoes_originadas",
+        verbose_name="Movimentação de Origem",
+    )
+    descricao_necessidade = models.TextField(
+        verbose_name="Descrição da Necessidade",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDENTE,
+        verbose_name="Status",
+    )
+    data_solicitacao = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Data da Solicitação",
+    )
+    data_envio_email = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Data de Envio do E-mail",
+    )
+    data_conclusao = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Data de Conclusão",
+    )
+    motivo_rejeicao = models.TextField(
+        null=True,
+        blank=True,
+        verbose_name="Motivo da Rejeição",
+    )
+    observacao_chefia = models.TextField(
+        null=True,
+        blank=True,
+        verbose_name="Observação da Chefia",
+    )
+
+    class Meta:
+        verbose_name = "Solicitação de Documento (Diligência)"
+        verbose_name_plural = "Solicitações de Documento (Diligências)"
+        ordering = ["-data_solicitacao"]
+
+    def __str__(self):
+        return (
+            f"Diligência #{self.pk} — Processo {self.processo.numero_protocolo} "
+            f"[{self.get_status_display()}]"
+        )
