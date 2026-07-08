@@ -88,6 +88,45 @@ function formatarData(iso) {
 
 
 /**
+ * Ordena a lista de processos:
+ * 1º por prioridade de status (Chefia vê Concluído no topo; demais veem Rejeitado primeiro)
+ * 2º dentro do mesmo status, pela data_limite crescente (urgência → prazo menor = mais urgente)
+ *    Processos sem data_limite ficam no final do bloco.
+ */
+function ordenarProcessos(lista) {
+  const ordemChefia = {
+    CONCLUIDO:               0,
+    REJEITADO:               1,
+    EM_ANALISE:              2,
+    EM_DILIGENCIA:           3,
+    DEVOLVIDO:               4,
+    ARQUIVADO:               5,
+    AGUARDANDO_DISTRIBUICAO: 6,
+  }
+  const ordemProcurador = {
+    REJEITADO:               0,
+    EM_ANALISE:              1,
+    EM_DILIGENCIA:           2,
+    DEVOLVIDO:               3,
+    ARQUIVADO:               4,
+    AGUARDANDO_DISTRIBUICAO: 5,
+    CONCLUIDO:               6,
+  }
+  const ordem = isChefiaOrSuper.value ? ordemChefia : ordemProcurador
+
+  return [...lista].sort((a, b) => {
+    const pa = ordem[a.status] ?? 99
+    const pb = ordem[b.status] ?? 99
+    if (pa !== pb) return pa - pb
+    // Mesmo status → crescente por data_limite; null vai para o final
+    if (!a.data_limite && !b.data_limite) return 0
+    if (!a.data_limite) return 1
+    if (!b.data_limite) return -1
+    return a.data_limite.localeCompare(b.data_limite) // 'YYYY-MM-DD' compara corretamente como string
+  })
+}
+
+/**
  * Define classes CSS dinâmicas para a linha da tabela (Tr)
  * - Verde para processos concluídos
  * - Vermelho para processos com data limite ultrapassada
@@ -132,7 +171,7 @@ async function carregarProcessos(page = 1) {
 
     const { data } = await api.get(`gestao/processos/?${params.toString()}`)
     
-    processos.value    = data.results ?? data.results // Ajuste caso sua API não seja paginada em algum momento
+    processos.value    = ordenarProcessos(data.results ?? [])
     totalRecords.value = data.count ?? processos.value.length
   } catch (err) {
     toast.add({

@@ -31,34 +31,40 @@ const chartCargaData = computed(() => {
     datasets: [
       {
         label: 'No Prazo',
-        backgroundColor: '#3b82f6',
+        backgroundColor: '#031e6b',
         data: carga.map((p) => p.no_prazo),
         yAxisID: 'y',
+        order: 1,
       },
       {
         label: 'Em Atraso',
-        backgroundColor: '#ef4444',
+        backgroundColor: '#6a6f7a',
         data: carga.map((p) => p.em_atraso),
         yAxisID: 'y',
+        order: 1,
       },
       {
         label: 'Diligências',
-        backgroundColor: '#f59e0b',
+        backgroundColor: '#faad32',
         data: carga.map((p) => p.diligencias),
         yAxisID: 'y',
+        order: 1,
       },
       {
         type: 'line',
         label: 'Tempo Médio (dias)',
-        borderColor: '#8b5cf6',
-        backgroundColor: 'rgba(139,92,246,0.08)',
+        borderColor: '#25b01a',
+        backgroundColor: 'rgba(50,240,36,0.06)',
         borderWidth: 2,
-        pointBackgroundColor: '#8b5cf6',
-        pointRadius: 5,
+        pointBackgroundColor: '#25b01a',
+        pointBorderColor: '#fff',
+        pointBorderWidth: 2,
+        pointRadius: 3,
         tension: 0.3,
         fill: false,
         spanGaps: true,
         yAxisID: 'y2',
+        order: 0,
         data: carga.map((p) => p.tempo_medio_dias),
       },
     ],
@@ -69,7 +75,7 @@ const chartCargaOptions = {
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
-    legend: { position: 'top' },
+    legend: { display: false },
     tooltip: { mode: 'index', intersect: false },
   },
   scales: {
@@ -217,17 +223,17 @@ const prodPercentual = computed(() => {
         <!-- Legenda de referência -->
         <div class="flex gap-4 mt-3 justify-center text-xs text-gray-500">
           <span class="flex items-center gap-1">
-            <span class="inline-block w-3 h-3 rounded-sm bg-blue-500" /> No Prazo
+            <span class="inline-block w-3 h-3 rounded-sm bg-blue-700" /> No Prazo
           </span>
           <span class="flex items-center gap-1">
-            <span class="inline-block w-3 h-3 rounded-sm bg-red-500" /> Em Atraso
+            <span class="inline-block w-3 h-3 rounded-sm bg-slate-500" /> Em Atraso
           </span>
           <span class="flex items-center gap-1">
-            <span class="inline-block w-3 h-3 rounded-sm bg-yellow-400" /> Diligências
+            <span class="inline-block w-3 h-3 rounded-sm bg-[#faad32]" /> Diligências
           </span>
           <span class="flex items-center gap-1">
-            <span class="inline-block w-3 h-0.5 bg-violet-500" style="border-radius:2px" />
-            <span class="inline-block w-2 h-2 rounded-full bg-violet-500 -ml-1.5" />
+            <span class="inline-block w-3 h-0.5 bg-[#32f024]" style="border-radius:2px" />
+            <span class="inline-block w-2 h-2 rounded-full bg-slate-900 -ml-1.5" />
             Tempo Médio (dias)
           </span>
         </div>

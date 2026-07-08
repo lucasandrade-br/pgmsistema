@@ -53,7 +53,7 @@ class RemetenteWriteSerializer(serializers.ModelSerializer):
 class TipoDocumentoSerializer(serializers.ModelSerializer):
     class Meta:
         model = TipoDocumento
-        fields = ["id", "descricao"]
+        fields = ["id", "descricao", "ativo"]
 
 
 class NivelPrioridadeSerializer(serializers.ModelSerializer):
@@ -129,16 +129,23 @@ class RemetenteViewSet(viewsets.ModelViewSet):
         return Response(RemetenteSerializer(instance).data)
 
 
-class TipoDocumentoViewSet(viewsets.ReadOnlyModelViewSet):
+class TipoDocumentoViewSet(viewsets.ModelViewSet):
     """
-    GET /api/v1/cadastros/tipos-documento/
-
-    Lista de tipos de documento ativos. Sem paginação para facilitar cache local.
+    GET    /api/v1/cadastros/tipos-documento/                       → lista ativos (padrão — compatível com dropdowns existentes)
+    GET    /api/v1/cadastros/tipos-documento/?incluir_inativos=true → lista todos (usado pela tela de gestão)
+    POST   /api/v1/cadastros/tipos-documento/                       → criação
+    PATCH  /api/v1/cadastros/tipos-documento/{id}/                  → edição
     """
-    queryset = TipoDocumento.objects.filter(ativo=True)
-    serializer_class = TipoDocumentoSerializer
+    serializer_class   = TipoDocumentoSerializer
     permission_classes = [IsAuthenticated]
-    pagination_class = None   # lista completa — pequena, cacheável no frontend
+    pagination_class   = None
+
+    def get_queryset(self):
+        qs = TipoDocumento.objects.all()
+        # Por padrão retorna apenas ativos; ?incluir_inativos=true é usado pela tela de gestão
+        if not self.request.query_params.get("incluir_inativos"):
+            qs = qs.filter(ativo=True)
+        return qs
 
 
 class NivelPrioridadeViewSet(viewsets.ReadOnlyModelViewSet):

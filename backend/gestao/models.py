@@ -71,6 +71,7 @@ class Processo(models.Model):
         EM_ANALISE = "EM_ANALISE", "Em Análise"
         EM_DILIGENCIA = "EM_DILIGENCIA", "Em Diligência"
         CONCLUIDO = "CONCLUIDO", "Concluído"
+        FINALIZADO = "FINALIZADO", "Finalizado"
         ARQUIVADO = "ARQUIVADO", "Arquivado"
         REJEITADO = "REJEITADO", "Rejeitado"
 
@@ -156,6 +157,11 @@ class Processo(models.Model):
         default=False,
         verbose_name="Notificar Remetente",
     )
+    data_resposta_procurador = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Data da Resposta do Procurador",
+    )
 
     class Meta:
         verbose_name = "Processo"
@@ -181,6 +187,7 @@ class Movimentacao(models.Model):
         DILIGENCIA_RESOLVIDA = "DILIGENCIA_RESOLVIDA", "Diligência Resolvida"
         ARQUIVAMENTO = "ARQUIVAMENTO", "Arquivamento"
         DESARQUIVAMENTO = "DESARQUIVAMENTO", "Desarquivamento"
+        FINALIZACAO = "FINALIZACAO", "Finalização"
         DEVOLUCAO = "DEVOLUCAO", "Devolução"
         ANEXO_ARQUIVO = "ANEXO_ARQUIVO", "Anexo de Arquivo"
         OBSERVACAO_SIMPLES = "OBSERVACAO_SIMPLES", "Observação Simples"

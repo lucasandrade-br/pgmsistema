@@ -165,6 +165,7 @@ class ProcessoSerializer(serializers.ModelSerializer):
             "data_origem",
             "observacoes",
             "notificar_remetente",
+            "data_resposta_procurador",
             "remetente_email",
             "remetente_telefone",
             "remetente_tipo",

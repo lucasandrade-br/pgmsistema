@@ -193,7 +193,7 @@ const itensMenuSecundario = computed(() => {
     })
   }
 
-  if (p.status === 'ARQUIVADO' && isChefiaOrSuper.value) {
+  if (['ARQUIVADO', 'FINALIZADO'].includes(p.status) && isChefiaOrSuper.value) {
     items.push({
       label:   'Desarquivar',
       icon:    'pi pi-folder-open',
@@ -675,7 +675,7 @@ function confirmarExclusao() {
           severity="success"
           size="small"
           icon="pi pi-check-circle"
-          @click="abrirModalTramitacao('ARQUIVADO', 'Homologar Análise')"
+          @click="abrirModalTramitacao('FINALIZADO', 'Homologar Análise')"
         />
 
         <!-- Anexar: abre o modal de nova movimentação com WorkspaceAnexos -->
@@ -880,7 +880,7 @@ function confirmarExclusao() {
 
             <div>
               <dt class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Respondido em</dt>
-              <dd class="mt-1 font-medium text-gray-800">{{ formatarDataHora(processo.data_resposta) }}</dd>
+              <dd class="mt-1 font-medium text-gray-800">{{ formatarDataHora(processo.data_resposta_procurador) }}</dd>
             </div>
 
             <div>

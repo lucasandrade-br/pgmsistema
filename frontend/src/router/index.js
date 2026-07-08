@@ -11,6 +11,7 @@ const AnalisesPendentesView  = () => import('@/views/processos/AnalisesPendentes
 const DetalhesProcessoView   = () => import('@/views/processos/DetalhesProcessoView.vue')
 const NovoProcessoView       = () => import('@/views/processos/NovoProcessoView.vue')
 const GestaoEnvolvidosView   = () => import('@/views/cadastros/GestaoEnvolvidosView.vue')
+const GestaoTiposDocumentoView = () => import('@/views/cadastros/GestaoTiposDocumentoView.vue')
 const NotFoundView           = () => import('@/views/NotFoundView.vue')
 
 const router = createRouter({
@@ -105,6 +106,14 @@ const router = createRouter({
           path: '/cadastros/envolvidos',
           name: 'gestao-envolvidos',
           component: GestaoEnvolvidosView,
+          meta: {
+            roles: ['Protocolador-Chefe', 'Procurador-Chefe', 'Protocolo', 'Cadastrante'],
+          },
+        },
+        {
+          path: '/cadastros/tipos-documento',
+          name: 'gestao-tipos-documento',
+          component: GestaoTiposDocumentoView,
           meta: {
             roles: ['Protocolador-Chefe', 'Procurador-Chefe', 'Protocolo', 'Cadastrante'],
           },

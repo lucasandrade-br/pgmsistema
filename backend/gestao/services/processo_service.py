@@ -505,9 +505,10 @@ class ProcessoService:
 
         # Mapeia o Status do Processo para o Tipo de Evento na Timeline
         mapa_eventos = {
-            Processo.Status.CONCLUIDO: Movimentacao.TipoEvento.CONCLUSAO,
-            Processo.Status.REJEITADO: Movimentacao.TipoEvento.REJEICAO,
-            Processo.Status.ARQUIVADO: Movimentacao.TipoEvento.ARQUIVAMENTO,
+            Processo.Status.CONCLUIDO:  Movimentacao.TipoEvento.CONCLUSAO,
+            Processo.Status.FINALIZADO: Movimentacao.TipoEvento.FINALIZACAO,
+            Processo.Status.REJEITADO:  Movimentacao.TipoEvento.REJEICAO,
+            Processo.Status.ARQUIVADO:  Movimentacao.TipoEvento.ARQUIVAMENTO,
         }
         tipo_evento = mapa_eventos.get(novo_status, Movimentacao.TipoEvento.OBSERVACAO_SIMPLES)
 
@@ -521,12 +522,15 @@ class ProcessoService:
         elif novo_status == Processo.Status.EM_ANALISE:
             tipo_evento = Movimentacao.TipoEvento.DESARQUIVAMENTO
             descricao_log = motivo or "Processo reaberto/desarquivado para análise."
+        elif novo_status == Processo.Status.CONCLUIDO:
+            processo.data_resposta_procurador = timezone.now()
+            descricao_log = motivo or "Análise concluída pelo procurador."
         else:
             status_display = dict(Processo.Status.choices).get(novo_status, novo_status)
             descricao_log = motivo or f"Status tramitado para: {status_display}."
 
         processo.status = novo_status
-        processo.save(update_fields=["status", "procurador_atribuido", "data_limite", "data_atribuicao"])
+        processo.save(update_fields=["status", "procurador_atribuido", "data_limite", "data_atribuicao", "data_resposta_procurador"])
 
         # Registro obrigatório de auditoria (Timeline)
         Movimentacao.objects.create(

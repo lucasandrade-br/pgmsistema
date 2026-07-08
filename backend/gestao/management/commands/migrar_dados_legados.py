@@ -102,7 +102,7 @@ class Command(BaseCommand):
                         num_doc_origem, data_doc_origem, observacoes_protocolo,
                         procurador_atribuido_id, data_atribuicao, data_limite,
                         protocolado_por_id, data_recebimento, data_finalizacao,
-                        finalizado_por_id, obs_finalizacao
+                        finalizado_por_id, obs_finalizacao, data_resposta_procurador
                     FROM gestao_documento
                 """)
                 processos_legados = cursor.fetchall()
@@ -167,7 +167,7 @@ class Command(BaseCommand):
                     (
                         p_id, protocolo, status_antigo, rem_id, tipo_id, prio_id,
                         num_origem, dt_origem, obs_prot, proc_atrib_id, dt_atrib, dt_limite,
-                        prot_por_id, dt_receb, dt_finalizacao, fin_por_id, obs_fin
+                        prot_por_id, dt_receb, dt_finalizacao, fin_por_id, obs_fin, dt_resposta_proc
                     ) = p
 
                     # DE->PARA Status
@@ -178,7 +178,7 @@ class Command(BaseCommand):
                         'Aguardando Confirmação': Processo.Status.CONCLUIDO,
                         'Devolvido pela Análise': Processo.Status.DEVOLVIDO,
                         'Arquivado': Processo.Status.ARQUIVADO,
-                        'Finalizado': Processo.Status.ARQUIVADO,
+                        'Finalizado': Processo.Status.FINALIZADO,
                         'Em Diligência': Processo.Status.EM_DILIGENCIA,
                     }
                     status_novo = mapa_status.get(status_antigo, Processo.Status.EM_ANALISE)
@@ -196,7 +196,8 @@ class Command(BaseCommand):
                         observacoes=obs_prot or "",
                         procurador_atribuido_id=proc_atrib_id,
                         data_atribuicao=_aw(dt_atrib),
-                        data_limite=dt_limite
+                        data_limite=dt_limite,
+                        data_resposta_procurador=_aw(dt_resposta_proc),
                     )
 
                     # 4.2 Construir a Timeline (Event Sourcing)

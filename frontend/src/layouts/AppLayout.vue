@@ -63,6 +63,7 @@ const navItems = [
   { icon: 'pi-plus-circle',     label: 'Novo Processo',       to: '/processos/novo', roles: ['Protocolador-Chefe', 'Procurador-Chefe', 'Protocolo', 'Cadastrante'] },
   { icon: 'pi-search',          label: 'Consulta Geral',       to: '/consulta-geral' },
   { icon: 'pi-address-book',    label: 'Envolvidos',           to: '/cadastros/envolvidos', roles: ['Protocolador-Chefe', 'Procurador-Chefe', 'Protocolo', 'Cadastrante'] },
+  { icon: 'pi-file-check',      label: 'Tipos de Documento',   to: '/cadastros/tipos-documento', roles: ['Protocolador-Chefe', 'Procurador-Chefe', 'Protocolo', 'Cadastrante'] },
 
   { heading: 'Administração', roles: ['Procurador-Chefe', 'Protocolador-Chefe'] },
   { icon: 'pi-chart-bar',      label: 'Painel Gerencial',     to: '/painel-gerencial',  roles: ['Procurador-Chefe', 'Protocolador-Chefe'] },

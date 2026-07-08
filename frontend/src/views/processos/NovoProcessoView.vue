@@ -10,6 +10,7 @@ import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import WorkspaceAnexos from '@/components/shared/WorkspaceAnexos.vue'
 import FormularioEnvolvido from '@/components/shared/FormularioEnvolvido.vue'
+import FormularioTipoDocumento from '@/components/shared/FormularioTipoDocumento.vue'
 import api from '@/services/api'
 
 const toast  = useToast()
@@ -46,8 +47,14 @@ function onEnvolvidoSalvo(novaEntidade) {
     }
   }
   modalEnvolvidoVisivel.value = false
-}
-// ── Sugestões dos AutoCompletes ───────────────────────────────────────────────
+}// ── Modal de cadastro rápido de tipo de documento ──────────────────────────────────────────────
+const modalTipoVisivel = ref(false)
+
+function onTipoSalvo(novoTipo) {
+  tiposDocumento.value = [...tiposDocumento.value, novoTipo]
+  tipoProcesso.value   = novoTipo
+  modalTipoVisivel.value = false
+}// ── Sugestões dos AutoCompletes ───────────────────────────────────────────────
 const sugestoesRemetentes   = ref([])
 const sugestoesInteressados = ref([])
 
@@ -214,13 +221,12 @@ async function submitProcesso() {
       <p class="text-sm text-gray-400 mt-0.5">Preencha os dados e adicione os documentos abaixo.</p>
     </div>
 
-    <!-- ── Card superior: metadados do processo ──────────────────────────────── -->
+    <!-- ── Seção 1: Remetentes ────────────────────────────────────────────────── -->
     <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
       <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-5">
-        Dados do Processo
+        Remetentes
       </h2>
 
-      <!-- Linha 1: Remetente + Interessados -->
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
         <!-- Remetente Principal -->
@@ -276,25 +282,60 @@ async function submitProcesso() {
         </div>
 
       </div>
+    </div>
 
-      <!-- Linha 2: Tipo de Processo + Número de Origem + Prioridade -->
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
+    <!-- ── Seção 2: Detalhes do Processo ─────────────────────────────────────── -->
+    <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+      <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-5">
+        Detalhes do Processo
+      </h2>
+
+      <!-- Linha 1: Tipo + Prioridade -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
         <!-- Tipo de Processo -->
         <div class="flex flex-col gap-1.5">
           <label class="text-xs font-medium text-gray-500 uppercase tracking-wider">
             Tipo de Processo
           </label>
+          <div class="flex gap-2 items-start">
+            <Select
+              v-model="tipoProcesso"
+              :options="tiposDocumento"
+              optionLabel="descricao"
+              filter
+              filterPlaceholder="Buscar tipo..."
+              placeholder="Selecione o tipo"
+              class="flex-1"
+            />
+            <Button
+              icon="pi pi-plus"
+              severity="secondary"
+              text
+              v-tooltip.top="'Cadastrar novo tipo'"
+              @click="modalTipoVisivel = true"
+            />
+          </div>
+        </div>
+
+        <!-- Prioridade -->
+        <div class="flex flex-col gap-1.5">
+          <label class="text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Prioridade <span class="text-red-500">*</span>
+          </label>
           <Select
-            v-model="tipoProcesso"
-            :options="tiposDocumento"
-            optionLabel="descricao"
-            filter
-            filterPlaceholder="Buscar tipo..."
-            placeholder="Selecione o tipo"
+            v-model="prioridade"
+            :options="prioridades"
+            optionLabel="label"
+            placeholder="Selecione a prioridade"
             class="w-full"
           />
         </div>
+
+      </div>
+
+      <!-- Linha 2: Nº de Origem + Número SEI -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
 
         <!-- Número de Origem -->
         <div class="flex flex-col gap-1.5">
@@ -320,23 +361,9 @@ async function submitProcesso() {
           />
         </div>
 
-        <!-- Prioridade -->
-        <div class="flex flex-col gap-1.5">
-          <label class="text-xs font-medium text-gray-500 uppercase tracking-wider">
-            Prioridade <span class="text-red-500">*</span>
-          </label>
-          <Select
-            v-model="prioridade"
-            :options="prioridades"
-            optionLabel="label"
-            placeholder="Selecione a prioridade"
-            class="w-full"
-          />
-        </div>
-
       </div>
 
-      <!-- Linha 3: Observações (largura total) -->
+      <!-- Linha 3: Observações -->
       <div class="mt-4">
         <div class="flex flex-col gap-1.5">
           <label class="text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -353,7 +380,7 @@ async function submitProcesso() {
 
     </div>
 
-    <!-- ── Card inferior: workspace de documentos ───────────────────────────── -->
+    <!-- ── Seção 3: Documentos ────────────────────────────────────────────────── -->
     <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
       <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-5">
         Documentos
@@ -361,7 +388,7 @@ async function submitProcesso() {
       <WorkspaceAnexos v-model="listaAnexos" />
     </div>
 
-    <!-- ── Ação final ────────────────────────────────────────────────────────── -->
+    <!-- ── Ação final ─────────────────────────────────────────────────────────── -->
     <div class="flex justify-end pb-6">
       <Button
         label="Salvar Movimentação / Protocolar"
@@ -374,7 +401,7 @@ async function submitProcesso() {
       />
     </div>
 
-    <!-- ── Modal: cadastro rápido de envolvido ──────────────────────────────── -->
+    <!-- ── Modal: cadastro rápido de envolvido ───────────────────────────────── -->
     <Dialog
       v-model:visible="modalEnvolvidoVisivel"
       :header="alvoCadastro === 'remetente' ? 'Cadastrar Remetente' : 'Cadastrar Interessado'"
@@ -386,5 +413,16 @@ async function submitProcesso() {
       <FormularioEnvolvido @salvo="onEnvolvidoSalvo" />
     </Dialog>
 
+    <!-- ── Modal: cadastro rápido de tipo de documento ───────────────────────── -->
+    <Dialog
+      v-model:visible="modalTipoVisivel"
+      header="Cadastrar Tipo de Processo"
+      modal
+      :style="{ width: '420px' }"
+      :closable="true"
+      :draggable="false"
+    >
+      <FormularioTipoDocumento @salvo="onTipoSalvo" />
+    </Dialog>
   </div>
 </template>
