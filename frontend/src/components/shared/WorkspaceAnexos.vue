@@ -85,6 +85,22 @@ function abrirSeletor() {
 
 function processarArquivo(file) {
   if (!file) return
+
+  // Validação de tipo: aceita somente PDF e imagens JPEG/PNG
+  const EXTENSOES = ['pdf', 'jpg', 'jpeg', 'png']
+  const MIMETYPES = ['application/pdf', 'image/jpeg', 'image/png']
+  const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
+
+  if (!EXTENSOES.includes(ext) || !MIMETYPES.includes(file.type)) {
+    toast.add({
+      severity: 'warn',
+      summary:  'Tipo não permitido',
+      detail:   `"${file.name}" não é permitido. Use PDF, JPG, JPEG ou PNG.`,
+      life:     4000,
+    })
+    return
+  }
+
   arquivoAtual.value = file
   viewerUrl.value    = criarBlobUrl(file)
 }
@@ -212,7 +228,7 @@ function removerAnexo(id) {
         <input
           ref="fileInputRef"
           type="file"
-          accept=".pdf,application/pdf"
+          accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
           class="hidden"
           @change="onFileChange"
         />

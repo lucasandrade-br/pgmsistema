@@ -1,0 +1,35 @@
+{% extends 'emails/base_email.html' %}
+{% block content %}
+<p style="font-size: 16px; line-height: 1.5; margin-top: 0;">Olá, equipe de Chefia!</p>
+<p style="font-size: 14px; line-height: 1.5; color: #475569;">
+    Este é o relatório automatizado de processos com prazos de análise estourados. Abaixo está o detalhamento por procurador:
+</p>
+{% for email, dados in agrupamento.items %}
+    <div style="margin-top: 25px; border-top: 2px solid #e2e8f0; padding-top: 15px;">
+        <h3 style="margin: 0 0 10px 0; font-size: 15px; color: #1e293b;">
+            👤 {{ dados.nome }} <span style="font-weight: normal; color: #dc2626; font-size: 13px;">({{ dados.processos|length }} em atraso)</span>
+        </h3>
+        <table width="100%" border="0" cellspacing="0" cellpadding="8" style="border-collapse: collapse; font-size: 13px;">
+            <thead>
+                <tr style="background-color: #fef2f2; text-align: left; color: #991b1b;">
+                    <th style="border-bottom: 2px solid #fca5a5; padding: 8px;">Nº Protocolo</th>
+                    <th style="border-bottom: 2px solid #fca5a5; padding: 8px;">Prioridade</th>
+                    <th style="border-bottom: 2px solid #fca5a5; padding: 8px;">Atraso</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for proc in dados.processos %}
+                <tr>
+                    <td style="border-bottom: 1px solid #fee2e2; padding: 8px; color: #0f172a; font-weight: bold;">{{ proc.protocolo }}</td>
+                    <td style="border-bottom: 1px solid #fee2e2; padding: 8px; color: #475569;">{{ proc.prioridade }}</td>
+                    <td style="border-bottom: 1px solid #fee2e2; padding: 8px; color: #dc2626; font-weight: bold;">{{ proc.dias_atraso }} dias</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endfor %}
+<div style="text-align: center; margin: 30px 0;">
+    <a href="{{ link_sistema }}" style="background-color: #0f172a; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 14px; display: inline-block;">Acessar Painel Gerencial</a>
+</div>
+{% endblock %}

@@ -2,6 +2,7 @@
 Django settings for core_api project.
 """
 
+import os
 from pathlib import Path
 import environ
 
@@ -22,6 +23,12 @@ DEBUG = env("DEBUG")
 
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
 
+# URL pública do frontend (usada em e-mails e jobs)
+FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:5173")
+
+# Segredo compartilhado para endpoints internos acionados pelo Cloud Scheduler
+JOB_SECRET_KEY = env("JOB_SECRET_KEY", default="")
+
 
 # Application definition
 
@@ -36,6 +43,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "corsheaders",
     "django_filters",
+    "storages",
     # Apps de domínio
     "core",
     "cadastros",
@@ -48,6 +56,7 @@ AUTH_USER_MODEL = "core.CustomUser"
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -81,7 +90,8 @@ WSGI_APPLICATION = "core_api.wsgi.application"
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
 DATABASES = {
-    "default": env.db("DATABASE_URL"),
+    'default': env.db("DATABASE_URL"),
+    'legado': env.db("LEGADO_DATABASE_URL", default="sqlite:///dummy_legado.db")
 }
 
 # Django REST Framework
@@ -127,6 +137,13 @@ CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[
     "http://localhost:3000",
 ])
 
+# ── Criptografia de campos sensíveis (LGPD) ──────────────────────────────────
+# FIELD_ENCRYPTION_KEY: chave Fernet (AES-128-CBC + HMAC). Gere com:
+#   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# SEARCH_HASH_KEY: chave HMAC-SHA256 para hash de busca determinístico.
+FIELD_ENCRYPTION_KEY: str = env("FIELD_ENCRYPTION_KEY", default="")
+SEARCH_HASH_KEY:      str = env("SEARCH_HASH_KEY",      default="")
+
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
@@ -163,10 +180,40 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
 STATIC_URL = "static/"
+STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 
 # Media files (user-uploaded content)
 MEDIA_URL  = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+
+# ── Configurações de Produção (Cloud Run + GCS) ──────────────────────────────
+if not DEBUG:
+    # Segurança e Proxy (Cloud Run fica atrás do load balancer do Google)
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    USE_X_FORWARDED_HOST = True
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
+    # Origins confiáveis para CSRF (domínios de produção separados por vírgula no .env)
+    CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
+
+    # Arquivos estáticos: WhiteNoise com compressão e hash de cache-busting
+    STORAGES = {
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+        # Arquivos de mídia (anexos): Google Cloud Storage
+        # Requer: django-storages[google] google-auth google-cloud-storage
+        # GS_DEFAULT_ACL = None → arquivos privados com URL assinada (correto para docs jurídicos)
+        "default": {
+            "BACKEND": "storages.backends.gcloud.GoogleCloudStorage",
+        },
+    }
+    GS_BUCKET_NAME  = env("GS_BUCKET_NAME", default="")
+    GS_DEFAULT_ACL  = None          # privado; use GS_QUERYSTRING_AUTH=True para URLs assinadas
+    GS_QUERYSTRING_AUTH = True
+    GS_EXPIRATION   = 3600          # URL assinada expira em 1 hora
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field

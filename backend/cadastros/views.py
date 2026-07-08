@@ -4,28 +4,50 @@ Views (Endpoints) do app cadastros.
 Responsabilidades:
   - Expor listas de dados de referência para o Frontend (read-only).
   - RemetenteViewSet: suporta busca textual via ?search= para o AutoComplete.
+    Também suporta criação e edição de remetentes (FormularioEnvolvido).
   - TipoDocumentoViewSet / NivelPrioridadeViewSet: listas cacheáveis (sem paginação).
 """
 
-from rest_framework import serializers, viewsets
-from rest_framework.filters import SearchFilter
+from django.db.models import Q
+from rest_framework import serializers, status, viewsets
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 
 from cadastros.models import NivelPrioridade, Remetente, TipoDocumento
+from cadastros.utils.encryption import decrypt, encrypt, make_hash
 
 
 # ---------------------------------------------------------------------------
-# Serializers (inline — escopo reduzido, apenas para leitura)
+# Serializers
 # ---------------------------------------------------------------------------
 
 
 class RemetenteSerializer(serializers.ModelSerializer):
-    # Alias 'nome' para compatibilidade com optionLabel="nome" no AutoComplete Vue
+    """Serializer de leitura: inclui alias 'nome' para compatibilidade com o AutoComplete."""
+
     nome = serializers.CharField(source="nome_razao_social", read_only=True)
 
     class Meta:
         model = Remetente
-        fields = ["id", "nome", "tipo_pessoa"]
+        fields = ["id", "nome", "nome_razao_social", "tipo_pessoa", "doc", "email", "telefone"]
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Descriptografa campos sensíveis antes de entregar ao cliente
+        data["doc"]      = decrypt(data.get("doc")      or "")
+        data["telefone"] = decrypt(data.get("telefone") or "")
+        return data
+
+
+class RemetenteWriteSerializer(serializers.ModelSerializer):
+    """Serializer de escrita para criação e edição de Remetentes."""
+
+    nome_razao_social = serializers.CharField(max_length=255)
+    doc               = serializers.CharField(max_length=255, required=True, allow_blank=False)
+
+    class Meta:
+        model = Remetente
+        fields = ["nome_razao_social", "tipo_pessoa", "doc", "email", "telefone"]
 
 
 class TipoDocumentoSerializer(serializers.ModelSerializer):
@@ -45,19 +67,66 @@ class NivelPrioridadeSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 
-class RemetenteViewSet(viewsets.ReadOnlyModelViewSet):
+class RemetenteViewSet(viewsets.ModelViewSet):
     """
-    GET /api/v1/cadastros/remetentes/
-    GET /api/v1/cadastros/remetentes/?search=<termo>
+    GET    /api/v1/cadastros/remetentes/          → listagem / autocomplete
+    GET    /api/v1/cadastros/remetentes/?search=X → busca combinada (OR)
+    POST   /api/v1/cadastros/remetentes/          → criação via FormularioEnvolvido
+    PATCH  /api/v1/cadastros/remetentes/{id}/     → edição via FormularioEnvolvido
 
-    Suporta busca por nome_razao_social via DRF SearchFilter.
-    Usado pelo AutoComplete do formulário de Novo Processo.
+    Busca:
+      - icontains para nome_razao_social e email
+      - exact para doc e telefone (compatível com criptografia determinística)
     """
-    queryset = Remetente.objects.all()
-    serializer_class = RemetenteSerializer
     permission_classes = [IsAuthenticated]
-    filter_backends = [SearchFilter]
-    search_fields = ["nome_razao_social"]
+
+    def get_serializer_class(self):
+        if self.action in ("create", "update", "partial_update"):
+            return RemetenteWriteSerializer
+        return RemetenteSerializer
+
+    def get_queryset(self):
+        qs     = Remetente.objects.all()
+        search = self.request.query_params.get("search", "").strip()
+        if search:
+            qs = qs.filter(
+                Q(nome_razao_social__icontains=search)
+                | Q(email__icontains=search)
+                | Q(doc_hash__exact=make_hash(search))
+                | Q(telefone_hash__exact=make_hash(search))
+            )
+        return qs
+
+    def _apply_encryption(self, data: dict) -> dict:
+        """Criptografa doc/telefone e computa hashes de busca no dict de dados validados."""
+        if data.get("doc"):
+            raw = data["doc"]
+            data["doc"]      = encrypt(raw)
+            data["doc_hash"] = make_hash(raw)
+        if data.get("telefone"):
+            raw = data["telefone"]
+            data["telefone"]      = encrypt(raw)
+            data["telefone_hash"] = make_hash(raw)
+        return data
+
+    def create(self, request, *args, **kwargs):
+        """Cria Remetente com campos sensíveis criptografados."""
+        write_ser = RemetenteWriteSerializer(data=request.data)
+        write_ser.is_valid(raise_exception=True)
+        payload  = self._apply_encryption(dict(write_ser.validated_data))
+        instance = Remetente.objects.create(**payload)
+        return Response(RemetenteSerializer(instance).data, status=status.HTTP_201_CREATED)
+
+    def partial_update(self, request, *args, **kwargs):
+        """Atualiza parcialmente com re-criptografia dos campos alterados."""
+        instance  = self.get_object()
+        write_ser = RemetenteWriteSerializer(instance, data=request.data, partial=True)
+        write_ser.is_valid(raise_exception=True)
+        payload = self._apply_encryption(dict(write_ser.validated_data))
+        for attr, value in payload.items():
+            setattr(instance, attr, value)
+        instance.save()
+        return Response(RemetenteSerializer(instance).data)
 
 
 class TipoDocumentoViewSet(viewsets.ReadOnlyModelViewSet):

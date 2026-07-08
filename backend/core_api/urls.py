@@ -20,14 +20,22 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 
+from gestao.views import LinkPublicoViewSet
+
 urlpatterns = [
     path("admin/", admin.site.urls),
     # Autenticação JWT — /api/v1/auth/token/ e /api/v1/auth/token/refresh/
-    path("api/v1/auth/", include("core.urls")),
+    path("api/v1/auth/",      include("core.urls")),
     # Dados de referência — /api/v1/cadastros/remetentes/, /tipos-documento/, etc.
     path("api/v1/cadastros/", include("cadastros.urls")),
     # Gestão de Processos — /api/v1/gestao/processos/
-    path("api/v1/gestao/", include("gestao.urls")),
+    path("api/v1/gestao/",    include("gestao.urls")),
+    # Endpoint público de compartilhamento — sem autenticação
+    path(
+        "api/v1/publico/link/<uuid:token>/",
+        LinkPublicoViewSet.as_view({"get": "retrieve"}),
+        name="link-publico",
+    ),
 ]
 
 if settings.DEBUG:

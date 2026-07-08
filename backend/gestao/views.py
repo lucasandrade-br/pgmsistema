@@ -12,18 +12,24 @@ Nenhuma regra de negócio deve residir aqui.
 """
 
 import json
+from datetime import date, timedelta
 
-from django.db import IntegrityError
-from django.db.models import Q
+from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.db import IntegrityError, transaction
+from django.db.models import Count, Q
+from django.http import HttpResponseRedirect
+from django.utils import timezone
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from gestao.filters import DiligenciaFilter, ProcessoFilter
-from gestao.models import Anexo, Processo, SolicitacaoDocumento
+from gestao.models import Anexo, LinkCompartilhamento, Movimentacao, Processo, SolicitacaoDocumento
 from gestao.serializers import (
     AnexoUpdateSerializer,
     DiligenciaAprovarSerializer,
@@ -42,6 +48,7 @@ from gestao.serializers import (
 )
 from gestao.services.diligencia_service import DiligenciaError, DiligenciaService, StatusInvalidoError
 from gestao.services.movimentacao_service import MovimentacaoService, TipoEventoInvalidoError
+from gestao.services.notificacao_service import enfileirar_tarefa_email
 from gestao.services.processo_service import DistribuicaoError, ProcessoService
 
 # Grupos com visibilidade total sobre todos os processos
@@ -255,6 +262,38 @@ class ProcessoViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_409_CONFLICT,
             )
 
+        # ── Notificação por e-mail: um resumo por procurador ─────────────────────────────
+        # Agrupa os processos distribuídos por e-mail do procurador receptor.
+        # Uma única tarefa de e-mail é enfileirada por procurador ao fim da
+        # transação (on_commit), evitando spam e garantindo consistência.
+        agrupamento: dict = {}
+        for proc in processos:
+            procurador = proc.procurador_atribuido
+            if not procurador or not procurador.email:
+                continue
+            email = procurador.email
+            if email not in agrupamento:
+                agrupamento[email] = {
+                    "nome":      procurador.get_full_name() or procurador.username,
+                    "processos": [],
+                }
+            agrupamento[email]["processos"].append({
+                "protocolo":  proc.numero_protocolo,
+                "prioridade": proc.prioridade.descricao,
+            })
+
+        frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:5173")
+        for email, dados in agrupamento.items():
+            payload = {
+                "tipo_tarefa":     "ATRIBUICAO_LOTE",
+                "email_destino":   [email],
+                "procurador_nome": dados["nome"],
+                "processos":       dados["processos"],
+                "link_sistema":    f"{frontend_url}/analises-pendentes",
+            }
+            # lambda com default argument para evitar late-binding em loop
+            transaction.on_commit(lambda p=payload: enfileirar_tarefa_email(p))
+
         return Response(
             ProcessoSerializer(processos, many=True).data,
             status=status.HTTP_200_OK,
@@ -436,6 +475,67 @@ class ProcessoViewSet(viewsets.ModelViewSet):
             },
             status=status.HTTP_201_CREATED,
         )
+
+    @action(detail=True, methods=["post"], url_path="gerar-link")
+    def gerar_link(self, request: Request, pk: int = None) -> Response:
+        """
+        POST /api/v1/gestao/processos/{id}/gerar-link/
+
+        Gera o PDF integral dos Autos Digitais (capa + todos os anexos),
+        persiste no Cloud Storage e retorna um link público com expiração de 30 dias.
+
+        Respostas:
+            201 Created  → { token, data_expiracao, url_publica }
+            404 Not Found → processo não encontrado
+        """
+        from gestao.services.pdf_service import GeradorAutosService
+
+        processo = self.get_object()
+        try:
+            link = GeradorAutosService.gerar_e_salvar_autos(processo)
+        except Exception as exc:
+            return Response(
+                {"error_code": "PDF_GENERATION_ERROR", "message": str(exc), "details": {}},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        return Response(
+            {
+                "token":          str(link.token),
+                "data_expiracao": link.data_expiracao.isoformat(),
+                "url_publica":    request.build_absolute_uri(
+                    f"/api/v1/publico/link/{link.token}/"
+                ),
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["post"], url_path="enviar-link-autos")
+    def enviar_link_autos(self, request: Request, pk: int = None) -> Response:
+        """
+        POST /api/v1/gestao/processos/{id}/enviar-link-autos/
+
+        Enfileira o envio de e-mail com o link de compartilhamento dos Autos Digitais.
+        O link já deve ter sido gerado previamente via `gerar-link`.
+        """
+        processo      = self.get_object()
+        email_destino = request.data.get("email", "").strip()
+        link_acesso   = request.data.get("link", "").strip()
+
+        if not email_destino or not link_acesso:
+            return Response(
+                {"detail": "E-mail e link são obrigatórios."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        payload = {
+            "tipo_tarefa":      "COMPARTILHAR_AUTOS",
+            "email_destino":    [email_destino],
+            "numero_protocolo": processo.numero_protocolo,
+            "link_acesso":      link_acesso,
+        }
+        enfileirar_tarefa_email(payload)
+        return Response({"detail": "E-mail enfileirado com sucesso."}, status=status.HTTP_200_OK)
 
 
 def _montar_arquivos(request: Request) -> list[dict]:
@@ -746,3 +846,373 @@ class CategoriaDocumentoViewSet(viewsets.ViewSet):
 
         return Response(resultados, status=status.HTTP_200_OK)
 
+
+# ─ Grupos com perfil de chefia (acesso irrestrito) ───────────────────────────
+_GRUPOS_CHEFIA = {"Procurador-Chefe", "Protocolador-Chefe"}
+
+
+class DashboardViewSet(viewsets.ViewSet):
+    """
+    GET /api/v1/gestao/dashboard/resumo/
+
+    Retorna contagens consolidadas para o Painel de Controle, respeitando RBAC:
+      - Chefia / superuser: vê todos os processos e diligências.
+      - Procurador (não-chefe): vê apenas os seus próprios.
+      - Cadastrante: retorna tudo zerado (acesso apenas ao botão Novo Processo).
+    """
+    permission_classes = [IsAuthenticated]
+
+    @action(detail=False, methods=["get"])
+    def resumo(self, request: Request) -> Response:
+        user          = request.user
+        grupos        = set(user.groups.values_list("name", flat=True))
+        is_chefia     = user.is_superuser or bool(grupos & _GRUPOS_CHEFIA)
+        is_cadastrante = "Cadastrante" in grupos and not is_chefia
+
+        if is_cadastrante:
+            return Response({"pendentes": 0, "diligencias": 0, "aguardando": 0, "concluidos": 0})
+
+        # ── Processos pendentes (EM_ANALISE ou REJEITADO) ─────────────────────
+        pendentes_qs = Processo.objects.filter(
+            status__in=[Processo.Status.EM_ANALISE, Processo.Status.REJEITADO]
+        )
+        if not is_chefia:
+            pendentes_qs = pendentes_qs.filter(procurador_atribuido=user)
+
+        # ── Diligências em aberto (PENDENTE ou ENVIADA) ───────────────────────
+        diligencias_qs = SolicitacaoDocumento.objects.filter(
+            status__in=[
+                SolicitacaoDocumento.Status.PENDENTE,
+                SolicitacaoDocumento.Status.ENVIADA,
+            ]
+        )
+        if not is_chefia:
+            diligencias_qs = diligencias_qs.filter(processo__procurador_atribuido=user)
+
+        # ── Exclusivos de chefia ───────────────────────────────────────────────
+        aguardando = (
+            Processo.objects.filter(status=Processo.Status.AGUARDANDO_DISTRIBUICAO).count()
+            if is_chefia else 0
+        )
+        concluidos = (
+            Processo.objects.filter(status=Processo.Status.CONCLUIDO).count()
+            if is_chefia else 0
+        )
+
+        return Response({
+            "pendentes":   pendentes_qs.count(),
+            "diligencias": diligencias_qs.count(),
+            "aguardando":  aguardando,
+            "concluidos":  concluidos,
+        })
+
+    @action(detail=False, methods=["get"], url_path="gerencial")
+    def gerencial(self, request: Request) -> Response:
+        """
+        GET /api/v1/gestao/dashboard/gerencial/
+
+        Painel Gerencial (BI) exclusivo para a Chefia.
+
+        Retorna:
+            kpis:           total_fila, gargalo_diligencia, em_analise,
+                            tempo_medio_conclusao (dias).
+            carga_trabalho: por procurador — no_prazo, em_atraso, diligencias.
+            produtividade:  concluidos_30d, media_mensal_ano.
+
+        Permissão: Procurador-Chefe, Protocolador-Chefe ou superuser.
+        """
+        user   = request.user
+        grupos = set(user.groups.values_list("name", flat=True))
+
+        if not (user.is_superuser or bool(grupos & _GRUPOS_CHEFIA)):
+            return Response(
+                {"detail": "Acesso restrito à Chefia."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        User = get_user_model()
+        hoje = date.today()
+        agora = timezone.now()
+
+        # ── 1. KPIs Básicos ───────────────────────────────────────────────
+        total_fila = Processo.objects.filter(
+            status=Processo.Status.AGUARDANDO_DISTRIBUICAO,
+        ).count()
+
+        gargalo_diligencia = Processo.objects.filter(
+            status=Processo.Status.EM_DILIGENCIA,
+        ).count()
+
+        em_analise = Processo.objects.filter(
+            status=Processo.Status.EM_ANALISE,
+        ).count()
+
+        # ── 2. Tempo Médio de Conclusão ───────────────────────────────────
+        # Calcula em Python para máxima compatibilidade com MySQL.
+        movs_conclusao = (
+            Movimentacao.objects.filter(
+                tipo_evento=Movimentacao.TipoEvento.CONCLUSAO,
+                processo__data_atribuicao__isnull=False,
+            )
+            .values("data_criacao", "processo__data_atribuicao")
+        )
+        dias_list = []
+        for mov in movs_conclusao:
+            delta = mov["data_criacao"].date() - mov["processo__data_atribuicao"].date()
+            if delta.days >= 0:
+                dias_list.append(delta.days)
+        tempo_medio_conclusao = (
+            round(sum(dias_list) / len(dias_list)) if dias_list else None
+        )
+
+        # ── 3. Carga de Trabalho por Procurador ───────────────────────────
+        carga_qs = (
+            User.objects.filter(groups__name="Procuradores", is_active=True)
+            .annotate(
+                no_prazo=Count(
+                    "processos_atribuidos",
+                    filter=Q(
+                        processos_atribuidos__status=Processo.Status.EM_ANALISE,
+                        processos_atribuidos__data_limite__gte=hoje,
+                    ),
+                ),
+                em_atraso=Count(
+                    "processos_atribuidos",
+                    filter=Q(
+                        processos_atribuidos__status=Processo.Status.EM_ANALISE,
+                        processos_atribuidos__data_limite__lt=hoje,
+                    ),
+                ),
+                em_diligencia=Count(
+                    "processos_atribuidos",
+                    filter=Q(
+                        processos_atribuidos__status=Processo.Status.EM_DILIGENCIA,
+                    ),
+                ),
+            )
+            .order_by("first_name", "username")
+            .values(
+                "id", "first_name", "last_name", "username",
+                "no_prazo", "em_atraso", "em_diligencia",
+            )
+        )
+
+        # Tempo médio de conclusão por procurador: atribuição → CONCLUSAO mov.
+        movs_por_proc = (
+            Movimentacao.objects.filter(
+                tipo_evento=Movimentacao.TipoEvento.CONCLUSAO,
+                processo__procurador_atribuido__isnull=False,
+                processo__data_atribuicao__isnull=False,
+            )
+            .values(
+                "processo__procurador_atribuido_id",
+                "data_criacao",
+                "processo__data_atribuicao",
+            )
+        )
+        dias_por_proc: dict = {}
+        for mov in movs_por_proc:
+            proc_id = mov["processo__procurador_atribuido_id"]
+            delta = mov["data_criacao"].date() - mov["processo__data_atribuicao"].date()
+            if delta.days >= 0:
+                dias_por_proc.setdefault(proc_id, []).append(delta.days)
+
+        carga_trabalho = [
+            {
+                "nome": (
+                    f"{u['first_name']} {u['last_name']}".strip()
+                    or u["username"]
+                ),
+                "no_prazo":         u["no_prazo"],
+                "em_atraso":        u["em_atraso"],
+                "diligencias":      u["em_diligencia"],
+                "tempo_medio_dias": (
+                    round(sum(dias_por_proc[u["id"]]) / len(dias_por_proc[u["id"]]))
+                    if u["id"] in dias_por_proc else None
+                ),
+            }
+            for u in carga_qs
+        ]
+
+        # ── 4. Produtividade ──────────────────────────────────────────────
+        limite_30d  = agora - timedelta(days=30)
+        limite_365d = agora - timedelta(days=365)
+
+        concluidos_30d = Movimentacao.objects.filter(
+            tipo_evento=Movimentacao.TipoEvento.CONCLUSAO,
+            data_criacao__gte=limite_30d,
+        ).count()
+
+        concluidos_365d = Movimentacao.objects.filter(
+            tipo_evento=Movimentacao.TipoEvento.CONCLUSAO,
+            data_criacao__gte=limite_365d,
+        ).count()
+
+        media_mensal_ano = round(concluidos_365d / 12, 1)
+
+        return Response({
+            "kpis": {
+                "total_fila":            total_fila,
+                "gargalo_diligencia":    gargalo_diligencia,
+                "em_analise":            em_analise,
+                "tempo_medio_conclusao": tempo_medio_conclusao,
+            },
+            "carga_trabalho": carga_trabalho,
+            "produtividade": {
+                "concluidos_30d":   concluidos_30d,
+                "media_mensal_ano": media_mensal_ano,
+            },
+        })
+
+
+# ---------------------------------------------------------------------------
+# LinkPublicoViewSet — Endpoint público de consumo dos Autos Digitais
+# ---------------------------------------------------------------------------
+
+
+class LinkPublicoViewSet(viewsets.ViewSet):
+    """
+    GET /api/v1/publico/link/<uuid:token>/
+
+    Endpoint sem autenticação. Verifica a validade do token e redireciona
+    para a URL assinada do arquivo no Cloud Storage.
+
+    Respostas:
+        302 Found      → redireciona para arquivo_gerado.url (signed URL).
+        404 Not Found  → token inexistente.
+        410 Gone       → link expirado.
+    """
+
+    permission_classes = [AllowAny]
+
+    def retrieve(self, request: Request, token: str = None) -> Response:
+        try:
+            link = (
+                LinkCompartilhamento.objects
+                .select_related("processo")
+                .get(token=token)
+            )
+        except LinkCompartilhamento.DoesNotExist:
+            return Response(
+                {"detail": "Link não encontrado."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if timezone.now() > link.data_expiracao:
+            return Response(
+                {"detail": "Este link expirou e não está mais disponível."},
+                status=status.HTTP_410_GONE,
+            )
+
+        # O campo .url injeta a assinatura temporária automaticamente quando
+        # o backend de storage for GCS/S3 com signed URLs configuradas.
+        return HttpResponseRedirect(link.arquivo_gerado.url)
+
+
+# ---------------------------------------------------------------------------
+# ExecutarJobCobrancaView — Endpoint interno do Job de Cobrança de Prazos
+# ---------------------------------------------------------------------------
+
+
+class ExecutarJobCobrancaView(APIView):
+    """
+    POST /api/v1/gestao/internal/jobs/cobranca-atrasos/
+
+    Endpoint acionado pelo Google Cloud Scheduler (3x/semana).
+    Consulta processos com prazo vencido, agrupa por procurador e
+    enfileira um e-mail de cobrança por procurador.
+
+    Segurança:
+        Requer o header ``X-Job-Secret`` igual a ``settings.JOB_SECRET_KEY``.
+        Não usa JWT de usuário — destinado exclusivamente à Service Account
+        do Cloud Scheduler.
+    """
+
+    permission_classes = [AllowAny]  # autenticação via header secreto abaixo
+
+    def post(self, request: Request) -> Response:
+        # ── Verificação do segredo do job ─────────────────────────────────────────
+        job_secret = getattr(settings, "JOB_SECRET_KEY", "")
+        if not job_secret or request.headers.get("X-Job-Secret") != job_secret:
+            return Response(
+                {"detail": "Acesso negado."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # ── Consulta processos ativos com prazo vencido ────────────────────────
+        hoje = date.today()
+        processos_ativos = (
+            Processo.objects
+            .select_related("procurador_atribuido", "prioridade")
+            .filter(
+                status__in=[
+                    Processo.Status.EM_ANALISE,
+                    Processo.Status.EM_DILIGENCIA,
+                ],
+                data_limite__lt=hoje,
+                procurador_atribuido__isnull=False,
+                procurador_atribuido__email__gt="",
+            )
+        )
+
+        # ── Agrupamento por procurador ──────────────────────────────────
+        agrupamento: dict = {}
+        for proc in processos_ativos:
+            procurador = proc.procurador_atribuido
+            email = procurador.email
+            if email not in agrupamento:
+                agrupamento[email] = {
+                    "nome":      procurador.get_full_name() or procurador.username,
+                    "processos": [],
+                }
+            agrupamento[email]["processos"].append({
+                "protocolo":   proc.numero_protocolo,
+                "prioridade":  proc.prioridade.descricao,
+                "dias_atraso": (hoje - proc.data_limite).days,
+            })
+
+        # ── Despacho das tarefas de e-mail ───────────────────────────────
+        frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:5173")
+        from gestao.services.notificacao_service import enfileirar_tarefa_email
+
+        for email, dados in agrupamento.items():
+            payload = {
+                "tipo_tarefa":     "COBRANCA_ATRASOS",
+                "email_destino":   [email],
+                "procurador_nome": dados["nome"],
+                "processos":       dados["processos"],
+                "link_sistema":    f"{frontend_url}/analises-pendentes",
+            }
+            enfileirar_tarefa_email(payload)
+
+        # ── Relatório gerencial para a Chefia ────────────────────────────────
+        # Um único e-mail com visão consolidada de todos os procuradores em
+        # atraso, enviado apenas se houver atrasos a reportar.
+        if agrupamento:
+            User = get_user_model()
+            emails_chefia = list(
+                User.objects
+                .filter(
+                    groups__name__in=["Procurador-Chefe", "Protocolador-Chefe"],
+                    is_active=True,
+                    email__gt="",
+                )
+                .values_list("email", flat=True)
+                .distinct()
+            )
+            if emails_chefia:
+                payload_chefia = {
+                    "tipo_tarefa":  "COBRANCA_CHEFIA",
+                    "emails_destino": emails_chefia,
+                    "agrupamento":  agrupamento,
+                    "link_sistema": f"{frontend_url}/consulta-geral",
+                }
+                enfileirar_tarefa_email(payload_chefia)
+
+        return Response(
+            {
+                "emails_enfileirados": len(agrupamento),
+                "processos_em_atraso": sum(len(d["processos"]) for d in agrupamento.values()),
+            },
+            status=status.HTTP_200_OK,
+        )

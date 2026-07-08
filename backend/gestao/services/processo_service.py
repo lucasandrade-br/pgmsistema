@@ -89,6 +89,19 @@ def gerar_numero_protocolo() -> str:
     return f"{prefixo}-{sequencial:03d}"
 
 
+def proxima_data_util(data: date) -> date:
+    """
+    Avança datas de fim de semana para a segunda-feira imediata.
+
+    weekday(): segunda=0, ..., sábado=5, domingo=6
+    """
+    if data.weekday() == 5:   # sábado → +2 dias
+        return data + timedelta(days=2)
+    if data.weekday() == 6:   # domingo → +1 dia
+        return data + timedelta(days=1)
+    return data
+
+
 # ---------------------------------------------------------------------------
 # Serviço de Processo
 # ---------------------------------------------------------------------------
@@ -280,8 +293,11 @@ class ProcessoService:
             # Round-Robin: modulo determina o receptor neste ciclo
             procurador = procuradores[i % total_procuradores]
 
-            # Cálculo de prazo: data atual + dias cadastrados na prioridade
-            data_limite = hoje + timedelta(days=processo.prioridade.prazo_dias)
+            # Cálculo de prazo: data atual + dias cadastrados na prioridade.
+            # Se o resultado cair em fim de semana, avança para a segunda-feira.
+            data_limite = proxima_data_util(
+                hoje + timedelta(days=processo.prioridade.prazo_dias)
+            )
 
             # Atualiza apenas os campos necessários (update_fields evita sobrescrever
             # campos que possam ter sido alterados por outra lógica concorrente)
@@ -394,9 +410,12 @@ class ProcessoService:
             # Round-Robin: mesmo algoritmo de distribuir_em_lote
             destino = procuradores_destino[i % total_destinos]
 
-            # Recalcula data_limite (hoje + prazo_dias), preserva status
+            # Recalcula data_limite (hoje + prazo_dias), preserva status.
+            # Se o resultado cair em fim de semana, avança para a segunda-feira.
             hoje = agora.date()
-            data_limite = hoje + timedelta(days=processo.prioridade.prazo_dias)
+            data_limite = proxima_data_util(
+                hoje + timedelta(days=processo.prioridade.prazo_dias)
+            )
 
             processo.procurador_atribuido = destino
             processo.data_atribuicao = agora

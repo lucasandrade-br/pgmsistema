@@ -54,6 +54,13 @@ const procuradores             = ref([])
 const isSubmittingAnexo        = ref(false)
 const isSavingEdicao           = ref(false)
 const tipoMovimentacao         = ref('Anexo')
+
+// ══════════════════ Autos Digitais ══════════════════════════
+const gerandoAutos          = ref(false)
+const modalAutosVisivel     = ref(false)
+const linkCompartilhamento  = ref('')
+const emailDestino          = ref('')
+const enviandoEmail         = ref(false)
 const descricaoDiligencia      = ref('')
 const dadosEdicaoAnexo         = ref({ categoria: null, numeracao: '', observacao: '', tipoAnexo: '' })
 
@@ -201,6 +208,12 @@ const itensMenuSecundario = computed(() => {
       command: () => { exibirModalEdicaoProcesso.value = true }
     })
   }
+
+  items.push({
+    label:   'Gerar Autos Digitais',
+    icon:    'pi pi-file-pdf',
+    command: () => gerarAutos()
+  })
 
   return items
 })
@@ -433,6 +446,79 @@ async function salvarEdicaoAnexo() {
     })
   } finally {
     isSavingEdicao.value = false
+  }
+}
+
+async function gerarAutos() {
+  gerandoAutos.value = true
+  try {
+    const { data } = await api.post(`gestao/processos/${processo.value.id}/gerar-link/`)
+    linkCompartilhamento.value = `${window.location.origin}/autos/${data.token}`
+    modalAutosVisivel.value = true
+  } catch {
+    toast.add({
+      severity: 'error',
+      summary:  'Erro',
+      detail:   'Não foi possível gerar os autos digitais. Tente novamente.',
+      life:     5000,
+    })
+  } finally {
+    gerandoAutos.value = false
+  }
+}
+
+function copiarLink() {
+  navigator.clipboard.writeText(linkCompartilhamento.value).then(() => {
+    toast.add({
+      severity: 'success',
+      summary:  'Copiado!',
+      detail:   'Link copiado para a área de transferência.',
+      life:     3000,
+    })
+  })
+}
+
+function enviarWhatsApp() {
+  const texto = encodeURIComponent(
+    'Segue o link de acesso aos autos digitais do processo. O link é válido por 30 dias: ' +
+    linkCompartilhamento.value
+  )
+  window.open(`https://api.whatsapp.com/send?text=${texto}`, '_blank')
+}
+
+async function enviarEmailAutos() {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!emailRegex.test(emailDestino.value)) {
+    toast.add({
+      severity: 'warn',
+      summary:  'E-mail inválido',
+      detail:   'Informe um endereço de e-mail válido antes de enviar.',
+      life:     3000,
+    })
+    return
+  }
+  enviandoEmail.value = true
+  try {
+    await api.post(`gestao/processos/${processo.value.id}/enviar-link-autos/`, {
+      email: emailDestino.value,
+      link:  linkCompartilhamento.value,
+    })
+    toast.add({
+      severity: 'success',
+      summary:  'E-mail enviado!',
+      detail:   `O link foi enviado para ${emailDestino.value}.`,
+      life:     4000,
+    })
+    emailDestino.value = ''
+  } catch {
+    toast.add({
+      severity: 'error',
+      summary:  'Erro ao enviar',
+      detail:   'Não foi possível enviar o e-mail. Tente novamente.',
+      life:     5000,
+    })
+  } finally {
+    enviandoEmail.value = false
   }
 }
 
@@ -1030,6 +1116,75 @@ function confirmarExclusao() {
         <div class="flex justify-end gap-2">
           <Button label="Cancelar" text severity="secondary" @click="exibirModalDistribuicao = false" />
           <Button label="Confirmar Atribuição" icon="pi pi-check" severity="primary" :loading="isSubmittingAcao" @click="salvarDistribuicao" />
+        </div>
+      </template>
+    </Dialog>
+
+    <!-- ════════════════ MODAL DE AUTOS DIGITAIS ════════════════ -->
+    <Dialog
+      v-model:visible="modalAutosVisivel"
+      modal
+      header="Autos Digitais Gerados"
+      :style="{ width: '34rem' }"
+      :breakpoints="{ '640px': '95vw' }"
+    >
+      <div class="flex flex-col gap-5 pt-2">
+        <p class="text-sm text-gray-600 leading-relaxed">
+          O processo foi unificado com sucesso em um único PDF.
+          Este link expirará em <strong>30 dias</strong>.
+        </p>
+
+        <InputText
+          :value="linkCompartilhamento"
+          readonly
+          class="w-full font-mono text-xs select-all"
+          @focus="$event.target.select()"
+        />
+
+        <div class="flex gap-2 justify-end">
+          <Button
+            label="Copiar Link"
+            icon="pi pi-copy"
+            severity="secondary"
+            @click="copiarLink"
+          />
+          <Button
+            label="WhatsApp"
+            icon="pi pi-whatsapp"
+            severity="success"
+            @click="enviarWhatsApp"
+          />
+        </div>
+
+        <hr class="border-gray-200">
+
+        <!-- Envio por e-mail -->
+        <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider -mb-2">Enviar por E-mail</p>
+        <div class="flex gap-2">
+          <InputText
+            v-model="emailDestino"
+            placeholder="Digite o e-mail do destinatário..."
+            class="flex-1"
+            type="email"
+          />
+          <Button
+            label="Enviar"
+            icon="pi pi-envelope"
+            severity="primary"
+            :loading="enviandoEmail"
+            @click="enviarEmailAutos"
+          />
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="flex justify-end">
+          <Button
+            label="Fechar"
+            text
+            severity="secondary"
+            @click="modalAutosVisivel = false"
+          />
         </div>
       </template>
     </Dialog>

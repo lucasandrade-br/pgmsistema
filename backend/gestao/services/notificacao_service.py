@@ -25,7 +25,6 @@ Segurança dos endpoints internos (futuro):
 
 from __future__ import annotations
 
-import json
 import logging
 
 from django.conf import settings
@@ -38,7 +37,7 @@ from gestao.models import Anexo
 logger = logging.getLogger(__name__)
 
 
-def executar_envio_email_diligencia(payload: dict) -> None:
+def _enviar_diligencia(payload: dict) -> None:
     """
     Worker que processa o payload do Cloud Tasks, renderiza o HTML,
     anexa os arquivos físicos e dispara via SMTP.
@@ -82,6 +81,236 @@ def executar_envio_email_diligencia(payload: dict) -> None:
     logger.info("[Email Worker] E-mail enviado com sucesso para %s.", emails_destino)
 
 
+def _enviar_redefinicao_senha(payload: dict) -> None:
+    """
+    Renderiza e despacha o e-mail de redefinição de senha via SMTP.
+    """
+    email_destino    = payload.get("email_destino", [])
+    usuario_nome     = payload.get("usuario_nome", "")
+    reset_link       = payload.get("reset_link", "")
+    minutos_validade = payload.get("minutos_validade", 15)
+
+    context = {
+        "usuario_nome":     usuario_nome,
+        "reset_link":       reset_link,
+        "minutos_validade": minutos_validade,
+        "titulo_cabecalho": "Redefinição de Senha",
+    }
+    html_content = render_to_string("emails/redefinicao_senha.html", context)
+    text_content = strip_tags(html_content)
+
+    msg = EmailMultiAlternatives(
+        subject="Redefinição de Senha - PGM",
+        body=text_content,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=email_destino,
+    )
+    msg.attach_alternative(html_content, "text/html")
+    msg.send(fail_silently=False)
+    logger.info("[Email Worker] E-mail de redefinição enviado com sucesso para %s.", email_destino)
+
+
+def _enviar_compartilhamento_autos(payload: dict) -> None:
+    """
+    Renderiza e despacha o e-mail com link de acesso aos autos digitais.
+    """
+    email_destino    = payload.get("email_destino", [])
+    numero_protocolo = payload.get("numero_protocolo", "")
+    link_acesso      = payload.get("link_acesso", "")
+
+    context = {
+        "numero_protocolo": numero_protocolo,
+        "link_acesso":      link_acesso,
+        "titulo_cabecalho": "Acesso aos Autos Digitais",
+    }
+    html_content = render_to_string("emails/compartilhamento_autos.html", context)
+    text_content = strip_tags(html_content)
+
+    msg = EmailMultiAlternatives(
+        subject=f"Autos Digitais - Processo {numero_protocolo}",
+        body=text_content,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=email_destino,
+    )
+    msg.attach_alternative(html_content, "text/html")
+    msg.send(fail_silently=False)
+    logger.info("[Email Worker] E-mail de compartilhamento de autos enviado para %s.", email_destino)
+
+
+def _enviar_atribuicao_lote(payload: dict) -> None:
+    """
+    Renderiza e despacha um único e-mail por procurador com a lista dos
+    processos recebidos na distribuição em lote.
+    """
+    email_destino   = payload.get("email_destino", [])
+    procurador_nome = payload.get("procurador_nome", "")
+    processos       = payload.get("processos", [])
+    link_sistema    = payload.get("link_sistema", "")
+
+    context = {
+        "procurador_nome":   procurador_nome,
+        "processos":         processos,
+        "quantidade":        len(processos),
+        "link_sistema":      link_sistema,
+        "titulo_cabecalho": "Nova Atribuição de Processos",
+    }
+    html_content = render_to_string("emails/atribuicao_lote.html", context)
+    text_content = strip_tags(html_content)
+
+    msg = EmailMultiAlternatives(
+        subject=f"Você recebeu {len(processos)} novo(s) processo(s) para análise",
+        body=text_content,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=email_destino,
+    )
+    msg.attach_alternative(html_content, "text/html")
+    msg.send(fail_silently=False)
+    logger.info(
+        "[Email Worker] E-mail de atribuição em lote enviado para %s (%d processo(s)).",
+        email_destino,
+        len(processos),
+    )
+
+
+def _enviar_cobranca_atrasos(payload: dict) -> None:
+    """
+    Renderiza e despacha o e-mail de cobrança de prazos vencidos.
+    Acionado pelo Job de Cobrança (Cloud Scheduler 3x/semana).
+    """
+    email_destino   = payload.get("email_destino", [])
+    procurador_nome = payload.get("procurador_nome", "")
+    processos       = payload.get("processos", [])
+    link_sistema    = payload.get("link_sistema", "")
+
+    context = {
+        "procurador_nome":   procurador_nome,
+        "processos":         processos,
+        "quantidade":        len(processos),
+        "link_sistema":      link_sistema,
+        "titulo_cabecalho": "Aviso de Prazos Vencidos",
+    }
+    html_content = render_to_string("emails/cobranca_atrasos.html", context)
+    text_content = strip_tags(html_content)
+
+    msg = EmailMultiAlternatives(
+        subject=f"Atenção: Você possui {len(processos)} processo(s) em atraso",
+        body=text_content,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=email_destino,
+    )
+    msg.attach_alternative(html_content, "text/html")
+    msg.send(fail_silently=False)
+    logger.info(
+        "[Email Worker] E-mail de cobrança de atrasos enviado para %s (%d processo(s)).",
+        email_destino,
+        len(processos),
+    )
+
+
+def _enviar_cobranca_chefia(payload: dict) -> None:
+    """
+    Renderiza e despacha o relatório gerencial de atrasos para a Chefia.
+    Um único e-mail agrega todos os procuradores em atraso.
+    """
+    emails_destino = payload.get("emails_destino", [])
+    agrupamento    = payload.get("agrupamento", {})
+    link_sistema   = payload.get("link_sistema", "")
+
+    context = {
+        "agrupamento":      agrupamento,
+        "link_sistema":     link_sistema,
+        "titulo_cabecalho": "Relatório Gerencial de Atrasos",
+    }
+    html_content = render_to_string("emails/cobranca_chefia.html", context)
+    text_content = strip_tags(html_content)
+
+    msg = EmailMultiAlternatives(
+        subject="Relatório Gerencial: Processos em Atraso",
+        body=text_content,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=emails_destino,
+    )
+    msg.attach_alternative(html_content, "text/html")
+    msg.send(fail_silently=False)
+    logger.info(
+        "[Email Worker] Relatório gerencial de atrasos enviado para %d destinatário(s) da Chefia.",
+        len(emails_destino),
+    )
+
+
+def _enviar_conclusao_diligencia(payload: dict) -> None:
+    """
+    Renderiza e despacha o e-mail de conclusão manual de diligência para o
+    procurador atribuído ao processo.
+    """
+    email_destino         = payload.get("email_destino", [])
+    procurador_nome       = payload.get("procurador_nome", "")
+    numero_protocolo      = payload.get("numero_protocolo", "")
+    diligencia_id         = payload.get("diligencia_id", "")
+    descricao_necessidade = payload.get("descricao_necessidade", "")
+    observacao_resolucao  = payload.get("observacao_resolucao", "")
+    nova_data_limite      = payload.get("nova_data_limite")
+    link_sistema          = payload.get("link_sistema", "")
+
+    context = {
+        "procurador_nome":       procurador_nome,
+        "numero_protocolo":      numero_protocolo,
+        "diligencia_id":         diligencia_id,
+        "descricao_necessidade": descricao_necessidade,
+        "observacao_resolucao":  observacao_resolucao,
+        "nova_data_limite":      nova_data_limite,
+        "link_sistema":          link_sistema,
+        "titulo_cabecalho":      "Diligência Concluída",
+    }
+    html_content = render_to_string("emails/diligencia_concluida_email.html", context)
+    text_content = strip_tags(html_content)
+
+    msg = EmailMultiAlternatives(
+        subject=f"Diligência #{diligencia_id} concluída - Processo {numero_protocolo}",
+        body=text_content,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=email_destino,
+    )
+    msg.attach_alternative(html_content, "text/html")
+    msg.send(fail_silently=False)
+    logger.info(
+        "[Email Worker] E-mail de conclusão de diligência enviado para %s.",
+        email_destino,
+    )
+
+
+def worker_processar_email(payload: dict) -> None:
+    """
+    Dispatcher principal do worker de e-mail.
+
+    Roteia a execução para o handler correto de acordo com o `tipo_tarefa`
+    presente no payload. Novos tipos de e-mail devem ser registrados aqui.
+
+    Tipos suportados:
+        - ``ENVIAR_EMAIL_DILIGENCIA``: notificação de pendência de diligência.
+    """
+    tipo_tarefa = payload.get("tipo_tarefa", "")
+
+    _handlers = {
+        "ENVIAR_EMAIL_DILIGENCIA": _enviar_diligencia,
+        "REDEFINIR_SENHA":         _enviar_redefinicao_senha,
+        "COMPARTILHAR_AUTOS":      _enviar_compartilhamento_autos,
+        "ATRIBUICAO_LOTE":         _enviar_atribuicao_lote,
+        "COBRANCA_ATRASOS":        _enviar_cobranca_atrasos,
+        "COBRANCA_CHEFIA":         _enviar_cobranca_chefia,
+        "CONCLUSAO_DILIGENCIA":    _enviar_conclusao_diligencia,
+    }
+
+    handler = _handlers.get(tipo_tarefa)
+    if handler:
+        handler(payload)
+    else:
+        logger.warning(
+            "[Email Worker] tipo_tarefa desconhecido ou não suportado: '%s'. Payload ignorado.",
+            tipo_tarefa,
+        )
+
+
 def enfileirar_tarefa_email(payload: dict) -> None:
     """
     Enfileira uma tarefa de envio de e-mail no Google Cloud Tasks.
@@ -120,40 +349,7 @@ def enfileirar_tarefa_email(payload: dict) -> None:
         - Adicionar CLOUD_TASKS_QUEUE_NAME e CLOUD_TASKS_SERVICE_URL ao .env.
         - Configurar autenticação OIDC na task para o endpoint interno.
     """
-    tipo_tarefa = payload.get("tipo_tarefa", "DESCONHECIDA")
-
-    # -----------------------------------------------------------------------
-    # SIMULAÇÃO — remover na Sprint de Deploy e substituir pela SDK real
-    # -----------------------------------------------------------------------
-    payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
-
-    print(
-        "\n"
-        "╔══════════════════════════════════════════════════════════════╗\n"
-        "║         [DEV] SIMULAÇÃO — Google Cloud Tasks                 ║\n"
-        "╠══════════════════════════════════════════════════════════════╣\n"
-        f"║  Fila:    pgm-email-queue                                    ║\n"
-        f"║  Tarefa:  {tipo_tarefa:<50} ║\n"
-        f"║  Destino: POST /api/v1/internal/tasks/enviar_email/          ║\n"
-        "╠══════════════════════════════════════════════════════════════╣\n"
-        f"{payload_json}\n"
-        "╚══════════════════════════════════════════════════════════════╝\n"
-    )
-
-    logger.info(
-        "[Cloud Tasks - DEV] Tarefa simulada enfileirada. "
-        "tipo=%s diligencia_id=%s processo=%s destino=%s",
-        tipo_tarefa,
-        payload.get("diligencia_id"),
-        payload.get("numero_protocolo"),
-        payload.get("emails_destino"),
-    )
-    # -----------------------------------------------------------------------
-    # FIM DA SIMULAÇÃO
-    # -----------------------------------------------------------------------
-
     # Em ambiente de desenvolvimento, executa o envio SMTP de forma síncrona
-    # para validar o template e as credenciais sem precisar do emulador GCP.
+    # sem precisar do emulador GCP.
     if settings.DEBUG:
-        print(">> [DEV] Iniciando disparo síncrono via SMTP configurado...")
-        executar_envio_email_diligencia(payload)
+        worker_processar_email(payload)

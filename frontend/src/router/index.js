@@ -10,6 +10,7 @@ const ConfirmResetView       = () => import('@/views/auth/ConfirmResetView.vue')
 const AnalisesPendentesView  = () => import('@/views/processos/AnalisesPendentesView.vue')
 const DetalhesProcessoView   = () => import('@/views/processos/DetalhesProcessoView.vue')
 const NovoProcessoView       = () => import('@/views/processos/NovoProcessoView.vue')
+const GestaoEnvolvidosView   = () => import('@/views/cadastros/GestaoEnvolvidosView.vue')
 const NotFoundView           = () => import('@/views/NotFoundView.vue')
 
 const router = createRouter({
@@ -84,7 +85,39 @@ const router = createRouter({
           name: 'diligencias',
           component: () => import('@/views/processos/ListagemDiligenciasView.vue'),
         },
+        {
+          path: 'painel-gerencial',
+          name: 'painel-gerencial',
+          component: () => import('@/views/PainelGerencialView.vue'),
+          meta: {
+            roles: ['Procurador-Chefe', 'Protocolador-Chefe'],
+          },
+        },
+        {
+          path: 'redistribuicao',
+          name: 'redistribuicao',
+          component: () => import('@/views/processos/RedistribuicaoView.vue'),
+          meta: {
+            roles: ['Procurador-Chefe', 'Protocolador-Chefe'],
+          },
+        },
+        {
+          path: '/cadastros/envolvidos',
+          name: 'gestao-envolvidos',
+          component: GestaoEnvolvidosView,
+          meta: {
+            roles: ['Protocolador-Chefe', 'Procurador-Chefe', 'Protocolo', 'Cadastrante'],
+          },
+        },
       ],
+    },
+
+    // ── Rotas públicas — sem AppLayout e sem autenticação ─────────────────
+    {
+      path: '/autos/:token',
+      name: 'autos-publicos',
+      component: () => import('@/views/AutosPublicosView.vue'),
+      meta: { requiresAuth: false },
     },
 
     // ── Catch-all: qualquer rota não mapeada → 404 ────────────────────────

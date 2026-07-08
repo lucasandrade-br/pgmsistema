@@ -1,0 +1,57 @@
+{% extends 'emails/base_email.html' %}
+{% block content %}
+<p style="font-size: 16px; line-height: 1.5; margin-top: 0;">Olá, {{ procurador_nome }}!</p>
+<p style="font-size: 14px; line-height: 1.5; color: #475569;">
+    Informamos que a <strong>Diligência #{{ diligencia_id }}</strong> vinculada ao Processo
+    <strong>{{ numero_protocolo }}</strong> foi concluída manualmente pela chefia.
+</p>
+
+<table width="100%" border="0" cellspacing="0" cellpadding="10"
+       style="margin: 20px 0; border-collapse: collapse; font-size: 14px; background-color: #f8fafc;">
+    <tr>
+        <td style="padding: 10px; color: #475569; font-weight: bold; width: 40%;
+                   border-bottom: 1px solid #e2e8f0;">Processo</td>
+        <td style="padding: 10px; color: #0f172a;
+                   border-bottom: 1px solid #e2e8f0;">{{ numero_protocolo }}</td>
+    </tr>
+    <tr>
+        <td style="padding: 10px; color: #475569; font-weight: bold;
+                   border-bottom: 1px solid #e2e8f0;">Diligência</td>
+        <td style="padding: 10px; color: #0f172a;
+                   border-bottom: 1px solid #e2e8f0;">#{{ diligencia_id }}</td>
+    </tr>
+    <tr>
+        <td style="padding: 10px; color: #475569; font-weight: bold;
+                   border-bottom: 1px solid #e2e8f0;">Descrição da Necessidade</td>
+        <td style="padding: 10px; color: #0f172a;
+                   border-bottom: 1px solid #e2e8f0;">{{ descricao_necessidade }}</td>
+    </tr>
+    {% if observacao_resolucao %}
+    <tr>
+        <td style="padding: 10px; color: #475569; font-weight: bold;
+                   border-bottom: 1px solid #e2e8f0;">Observação da Chefia</td>
+        <td style="padding: 10px; color: #0f172a;
+                   border-bottom: 1px solid #e2e8f0;">{{ observacao_resolucao }}</td>
+    </tr>
+    {% endif %}
+    {% if nova_data_limite %}
+    <tr>
+        <td style="padding: 10px; color: #475569; font-weight: bold;">Nova Data Limite</td>
+        <td style="padding: 10px; color: #16a34a; font-weight: bold;">{{ nova_data_limite }}</td>
+    </tr>
+    {% endif %}
+</table>
+
+<p style="font-size: 14px; line-height: 1.5; color: #475569;">
+    O processo retornou à fila de análise e aguarda sua continuidade.
+    {% if nova_data_limite %}
+    O prazo foi recalculado conforme a prioridade do processo.
+    {% endif %}
+</p>
+
+<div style="text-align: center; margin: 30px 0;">
+    <a href="{{ link_sistema }}" style="background-color: #2563eb; color: #ffffff; padding: 12px 24px;
+       text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 14px;
+       display: inline-block;">Acessar o Processo</a>
+</div>
+{% endblock %}

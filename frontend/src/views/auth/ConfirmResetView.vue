@@ -73,7 +73,7 @@ async function handleConfirm() {
     <!-- ── Lado Esquerdo: Branding (desktop only) ───────────────────────── -->
     <div class="hidden lg:flex lg:w-1/2 bg-slate-900 text-white flex-col justify-center items-start p-16">
       <p class="text-sm font-semibold tracking-widest text-slate-400 uppercase mb-6">
-        Procuradoria Geral do Município
+        Procuradoria-Geral do Município
       </p>
       <h1 class="text-5xl font-bold leading-tight mb-4">
         PGM<span class="text-blue-400">Sistema</span>

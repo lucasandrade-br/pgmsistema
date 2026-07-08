@@ -4,6 +4,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from core.models import CustomUser, PasswordResetToken
+from gestao.services.notificacao_service import enfileirar_tarefa_email
 
 # TTL do token de redefinição de senha (em minutos).
 # Mantido como constante nomeada para facilitar auditoria e ajuste futuro.
@@ -52,18 +53,15 @@ def request_password_reset(email: str) -> None:
     # Cria o novo token (UUID gerado automaticamente pelo default do campo)
     reset_token = PasswordResetToken.objects.create(user=user)
 
-    # ── Simulação de envio de e-mail (TODO: Cloud Tasks na Sprint de Deploy) ──
     reset_link = f"http://localhost:5173/redefinir-senha?token={reset_token.token}"
-    print(
-        "\n╔══════════════════════════════════════════════════════════════╗\n"
-        "║       [DEV] SIMULAÇÃO — E-mail de Redefinição de Senha       ║\n"
-        "╠══════════════════════════════════════════════════════════════╣\n"
-        f"║  Para:    {user.email:<50} ║\n"
-        f"║  Usuário: {user.username:<50} ║\n"
-        f"║  Link:    {reset_link:<50} ║\n"
-        f"║  Expira:  em {_TOKEN_TTL_MINUTES} minutos{'':<41} ║\n"
-        "╚══════════════════════════════════════════════════════════════╝\n"
-    )
+    payload = {
+        "tipo_tarefa":      "REDEFINIR_SENHA",
+        "email_destino":    [user.email],
+        "usuario_nome":     user.first_name or user.username,
+        "reset_link":       reset_link,
+        "minutos_validade": _TOKEN_TTL_MINUTES,
+    }
+    enfileirar_tarefa_email(payload)
 
 
 @transaction.atomic

@@ -62,10 +62,11 @@ const navItems = [
   { heading: 'Gerencial' },
   { icon: 'pi-plus-circle',     label: 'Novo Processo',       to: '/processos/novo', roles: ['Protocolador-Chefe', 'Procurador-Chefe', 'Protocolo', 'Cadastrante'] },
   { icon: 'pi-search',          label: 'Consulta Geral',       to: '/consulta-geral' },
+  { icon: 'pi-address-book',    label: 'Envolvidos',           to: '/cadastros/envolvidos', roles: ['Protocolador-Chefe', 'Procurador-Chefe', 'Protocolo', 'Cadastrante'] },
 
   { heading: 'Administração', roles: ['Procurador-Chefe', 'Protocolador-Chefe'] },
-  { icon: 'pi-users',           label: 'Usuários',             to: '/usuarios', roles: ['Procurador-Chefe', 'Protocolador-Chefe'] },
-  { icon: 'pi-cog',             label: 'Configurações',        to: '/configuracoes', roles : ['Protocolador-Chefe'] }
+  { icon: 'pi-chart-bar',      label: 'Painel Gerencial',     to: '/painel-gerencial',  roles: ['Procurador-Chefe', 'Protocolador-Chefe'] },
+  { icon: 'pi-sync',            label: 'Redistribuir Processos', to: '/redistribuicao',   roles: ['Procurador-Chefe', 'Protocolador-Chefe'] },
 ]
 </script>
 

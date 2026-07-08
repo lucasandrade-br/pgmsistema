@@ -7,7 +7,9 @@ import Select from 'primevue/select'
 import InputText from 'primevue/inputtext'
 import Textarea from 'primevue/textarea'
 import Button from 'primevue/button'
+import Dialog from 'primevue/dialog'
 import WorkspaceAnexos from '@/components/shared/WorkspaceAnexos.vue'
+import FormularioEnvolvido from '@/components/shared/FormularioEnvolvido.vue'
 import api from '@/services/api'
 
 const toast  = useToast()
@@ -25,7 +27,26 @@ const dataOrigem        = ref(null)   // Date string YYYY-MM-DD (campo sem UI po
 const notificarRemetente = ref(false) // flag de notificação ao remetente
 const isSubmitting      = ref(false)  // bloqueia duplo-clique durante o POST
 const listaAnexos       = ref([])
+// ── Modal de cadastro de envolvido ─────────────────────────────────────────────────────────────────
+const modalEnvolvidoVisivel = ref(false)
+const alvoCadastro          = ref('remetente')  // 'remetente' | 'interessado'
 
+function abrirModalCadastro(alvo) {
+  alvoCadastro.value          = alvo
+  modalEnvolvidoVisivel.value = true
+}
+
+function onEnvolvidoSalvo(novaEntidade) {
+  if (alvoCadastro.value === 'remetente') {
+    remetente.value = novaEntidade
+  } else {
+    // Evita duplicata na lista de interessados
+    if (!interessados.value.some(i => i.id === novaEntidade.id)) {
+      interessados.value = [...interessados.value, novaEntidade]
+    }
+  }
+  modalEnvolvidoVisivel.value = false
+}
 // ── Sugestões dos AutoCompletes ───────────────────────────────────────────────
 const sugestoesRemetentes   = ref([])
 const sugestoesInteressados = ref([])
@@ -207,21 +228,25 @@ async function submitProcesso() {
           <label class="text-xs font-medium text-gray-500 uppercase tracking-wider">
             Remetente Principal <span class="text-red-500">*</span>
           </label>
-          <!--
-            AutoComplete em modo single.
-            forceSelection garante que o usuário não deixe texto livre sem selecionar.
-            A API retorna { id, nome } — optionLabel="nome" exibe o campo correto.
-          -->
-          <AutoComplete
-            v-model="remetente"
-            :suggestions="sugestoesRemetentes"
-            optionLabel="nome"
-            forceSelection
-            placeholder="Digite para buscar..."
-            class="w-full"
-            inputClass="w-full"
-            @complete="buscarRemetentes"
-          />
+          <div class="flex gap-2 items-start">
+            <AutoComplete
+              v-model="remetente"
+              :suggestions="sugestoesRemetentes"
+              optionLabel="nome"
+              forceSelection
+              placeholder="Digite para buscar..."
+              class="flex-1"
+              inputClass="w-full"
+              @complete="buscarRemetentes"
+            />
+            <Button
+              icon="pi pi-plus"
+              severity="secondary"
+              text
+              v-tooltip.top="'Cadastrar novo remetente'"
+              @click="abrirModalCadastro('remetente')"
+            />
+          </div>
         </div>
 
         <!-- Interessados -->
@@ -229,20 +254,25 @@ async function submitProcesso() {
           <label class="text-xs font-medium text-gray-500 uppercase tracking-wider">
             Interessados
           </label>
-          <!--
-            AutoComplete em modo multiple.
-            Mesma API de remetentes (órgãos/secretarias também são cadastrados como Remetente).
-          -->
-          <AutoComplete
-            v-model="interessados"
-            :suggestions="sugestoesInteressados"
-            optionLabel="nome"
-            multiple
-            placeholder="Busque secretarias/órgãos..."
-            class="w-full"
-            inputClass="w-full"
-            @complete="buscarInteressados"
-          />
+          <div class="flex gap-2 items-start">
+            <AutoComplete
+              v-model="interessados"
+              :suggestions="sugestoesInteressados"
+              optionLabel="nome"
+              multiple
+              placeholder="Busque secretarias/órgãos..."
+              class="flex-1"
+              inputClass="w-full"
+              @complete="buscarInteressados"
+            />
+            <Button
+              icon="pi pi-plus"
+              severity="secondary"
+              text
+              v-tooltip.top="'Cadastrar novo interessado'"
+              @click="abrirModalCadastro('interessado')"
+            />
+          </div>
         </div>
 
       </div>
@@ -343,6 +373,18 @@ async function submitProcesso() {
         @click="submitProcesso"
       />
     </div>
+
+    <!-- ── Modal: cadastro rápido de envolvido ──────────────────────────────── -->
+    <Dialog
+      v-model:visible="modalEnvolvidoVisivel"
+      :header="alvoCadastro === 'remetente' ? 'Cadastrar Remetente' : 'Cadastrar Interessado'"
+      modal
+      :style="{ width: '480px' }"
+      :closable="true"
+      :draggable="false"
+    >
+      <FormularioEnvolvido @salvo="onEnvolvidoSalvo" />
+    </Dialog>
 
   </div>
 </template>

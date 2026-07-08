@@ -11,16 +11,36 @@ class Remetente(models.Model):
         max_length=255,
         verbose_name="Nome / Razão Social",
     )
+    doc = models.CharField(
+        max_length=500,
+        null=True,
+        blank=True,
+        verbose_name="CPF / CNPJ (criptografado)",
+    )
+    doc_hash = models.CharField(
+        max_length=64,
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name="Hash do documento (busca)",
+    )
     email = models.EmailField(
         null=True,
         blank=True,
         verbose_name="E-mail",
     )
     telefone = models.CharField(
-        max_length=20,
+        max_length=500,
         null=True,
         blank=True,
-        verbose_name="Telefone",
+        verbose_name="Telefone (criptografado)",
+    )
+    telefone_hash = models.CharField(
+        max_length=64,
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name="Hash do telefone (busca)",
     )
     tipo_pessoa = models.CharField(
         max_length=20,

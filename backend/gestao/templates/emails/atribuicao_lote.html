@@ -1,0 +1,26 @@
+{% extends 'emails/base_email.html' %}
+{% block content %}
+<p style="font-size: 16px; line-height: 1.5; margin-top: 0;">Olá, {{ procurador_nome }}!</p>
+<p style="font-size: 14px; line-height: 1.5; color: #475569;">
+    Informamos que <strong>{{ quantidade }} novos processos</strong> foram atribuídos à sua fila de trabalho na distribuição recente.
+</p>
+<table width="100%" border="0" cellspacing="0" cellpadding="10" style="margin: 20px 0; border-collapse: collapse; font-size: 14px;">
+    <thead>
+        <tr style="background-color: #f1f5f9; text-align: left; color: #475569;">
+            <th style="border-bottom: 2px solid #cbd5e1; padding: 10px;">Nº Protocolo</th>
+            <th style="border-bottom: 2px solid #cbd5e1; padding: 10px;">Prioridade</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for proc in processos %}
+        <tr>
+            <td style="border-bottom: 1px solid #e2e8f0; padding: 10px; color: #0f172a; font-weight: bold;">{{ proc.protocolo }}</td>
+            <td style="border-bottom: 1px solid #e2e8f0; padding: 10px; color: #ef4444;">{{ proc.prioridade }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+<div style="text-align: center; margin: 30px 0;">
+    <a href="{{ link_sistema }}" style="background-color: #2563eb; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 14px; display: inline-block;">Acessar Minhas Análises</a>
+</div>
+{% endblock %}

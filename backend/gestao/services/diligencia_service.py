@@ -15,14 +15,17 @@ Regras:
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
 
 from gestao.models import Anexo, Movimentacao, Processo, SolicitacaoDocumento
 from gestao.services.notificacao_service import enfileirar_tarefa_email
+from gestao.services.processo_service import proxima_data_util
 
 User = get_user_model()
 
@@ -360,7 +363,8 @@ class DiligenciaService:
             .get(pk=diligencia_id)
         )
         processo = (
-            Processo.objects.select_for_update()
+            Processo.objects.select_related("prioridade", "procurador_atribuido")
+            .select_for_update()
             .get(pk=diligencia.processo_id)
         )
 
@@ -425,9 +429,38 @@ class DiligenciaService:
 
         # 7. Transição condicional: só retorna o Processo para EM_ANALISE
         #    quando todas as diligências paralelas também estiverem encerradas.
+        #    A data_limite é recalculada a partir da data de conclusão + prazo da
+        #    prioridade, garantindo que o procurador tenha tempo útil real de análise
+        #    independentemente do atraso acumulado durante a diligência.
+        nova_data_limite = None
         if not tem_outras_ativas:
+            nova_data_limite = proxima_data_util(
+                agora.date() + timedelta(days=processo.prioridade.prazo_dias)
+            )
             processo.status = Processo.Status.EM_ANALISE
-            processo.save(update_fields=["status"])
+            processo.data_limite = nova_data_limite
+            processo.save(update_fields=["status", "data_limite"])
+
+        # 8. Notifica o procurador atribuído sobre a conclusão da diligência.
+        #    Enfileirado via on_commit — só dispara após o commit bem-sucedido.
+        if processo.procurador_atribuido_id and processo.procurador_atribuido.email:
+            payload_email = {
+                "tipo_tarefa":          "CONCLUSAO_DILIGENCIA",
+                "email_destino":        [processo.procurador_atribuido.email],
+                "procurador_nome":      (
+                    processo.procurador_atribuido.get_full_name()
+                    or processo.procurador_atribuido.username
+                ),
+                "numero_protocolo":     processo.numero_protocolo,
+                "diligencia_id":        diligencia_id,
+                "descricao_necessidade": diligencia.descricao_necessidade,
+                "observacao_resolucao": observacao_resolucao or "",
+                "nova_data_limite":     (
+                    nova_data_limite.strftime("%d/%m/%Y") if nova_data_limite else None
+                ),
+                "link_sistema":         settings.FRONTEND_URL,
+            }
+            transaction.on_commit(lambda p=payload_email: enfileirar_tarefa_email(p))
 
         return diligencia
 
