@@ -185,7 +185,7 @@ const itensMenuSecundario = computed(() => {
     })
   }
 
-  if (!['ARQUIVADO', 'REJEITADO'].includes(p.status) && isChefiaOrSuper.value) {
+  if (!['ARQUIVADO', 'REJEITADO', 'FINALIZADO'].includes(p.status) && isChefiaOrSuper.value) {
     items.push({
       label:   'Arquivar',
       icon:    'pi pi-folder',
@@ -201,7 +201,7 @@ const itensMenuSecundario = computed(() => {
     })
   }
 
-  if ((!['ARQUIVADO', 'CONCLUIDO', 'REJEITADO'].includes(p.status) && isChefiaOrSuper.value) || isSuperUser.value) {
+  if ((!['ARQUIVADO', 'CONCLUIDO', 'REJEITADO', 'FINALIZADO'].includes(p.status) && isChefiaOrSuper.value) || isSuperUser.value) {
     items.push({
       label:   'Editar Dados',
       icon:    'pi pi-pencil',
@@ -595,7 +595,7 @@ function confirmarExclusao() {
       <!-- Lado esquerdo: botão de toggle da timeline + dados resumidos -->
       <div class="flex items-center min-w-0">
         <Button
-          :icon="isTimelineOpen ? 'pi pi-angle-double-left' : 'pi pi-bars'"
+          icon="pi pi-bars"
           text
           rounded
           severity="secondary"
@@ -678,8 +678,9 @@ function confirmarExclusao() {
           @click="abrirModalTramitacao('FINALIZADO', 'Homologar Análise')"
         />
 
-        <!-- Anexar: abre o modal de nova movimentação com WorkspaceAnexos -->
+        <!-- Anexar: oculto em processos arquivados ou finalizados -->
         <Button
+          v-if="!['ARQUIVADO', 'FINALIZADO'].includes(processo?.status)"
           icon="pi pi-paperclip"
           label="Anexar Arquivo"
           rounded
@@ -776,7 +777,7 @@ function confirmarExclusao() {
                 ]"
               >
                 <i :class="['pi pi-file-pdf shrink-0', selectedAnexo?.id === anexo.id ? 'text-red-500' : 'text-red-400']" />
-                <span class="truncate">{{ anexo.nome }}</span>
+                <span class="truncate">{{ [anexo.tipo_documento_descricao?.toUpperCase(), anexo.numero_documento].filter(Boolean).join(' | ') || anexo.nome }}</span>
                 <i v-if="selectedAnexo?.id === anexo.id" class="pi pi-eye ml-auto text-blue-400" />
               </div>
             </div>
@@ -794,6 +795,8 @@ function confirmarExclusao() {
       <VisualizadorPDFPadrao
         v-if="!diligenciaEmFoco"
         :arquivoNome="selectedAnexo?.nome"
+        :categoriaAnexo="selectedAnexo?.tipo_documento_descricao"
+        :numeracaoAnexo="selectedAnexo?.numero_documento"
         :viewerUrl="viewerUrlCompleta"
         :textoNota="viewerUrlCompleta ? null : (selectedAnexo?.observacao || null)"
         class="flex-1 h-full border-none rounded-none"

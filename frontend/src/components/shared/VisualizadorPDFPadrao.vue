@@ -6,9 +6,20 @@ import VuePdfEmbed                 from 'vue-pdf-embed'
 import api                         from '@/services/api'
 
 const props = defineProps({
-  arquivoNome: { type: String, default: 'Documento Sem Nome' },
-  viewerUrl:   { type: String, default: null },
-  textoNota:   { type: String, default: null },
+  arquivoNome:    { type: String, default: 'Documento Sem Nome' },
+  categoriaAnexo: { type: String, default: null },
+  numeracaoAnexo: { type: String, default: null },
+  viewerUrl:      { type: String, default: null },
+  textoNota:      { type: String, default: null },
+})
+
+// Linha de título exibida na topbar: "PARECER | 1050/2026"
+const tituloTopbar = computed(() => {
+  const parts = [
+    props.categoriaAnexo?.toUpperCase() || null,
+    props.numeracaoAnexo || null,
+  ].filter(Boolean)
+  return parts.length ? parts.join(' | ') : (props.arquivoNome || 'Documento Sem Nome')
 })
 
 const emit = defineEmits(['editar', 'excluir'])
@@ -121,7 +132,7 @@ onUnmounted(_releaseOwnedBlob)
       <div class="flex items-center gap-2 min-w-0">
         <i class="pi pi-file-pdf text-red-500 shrink-0" />
         <span class="text-sm font-medium text-gray-700 truncate">
-          {{ arquivoNome }}
+          {{ tituloTopbar }}
         </span>
       </div>
       <div class="flex items-center gap-0.5 shrink-0 ml-4">

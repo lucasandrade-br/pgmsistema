@@ -52,7 +52,7 @@ const router = createRouter({
           path: 'analises-pendentes',
           name: 'analises-pendentes',
           component: AnalisesPendentesView,
-          // sem meta.roles — acesso comum a todos os grupos autenticados
+          meta: { keepAlive: true },
         },
         {
           path: 'processos/detalhes/:id',
@@ -73,18 +73,20 @@ const router = createRouter({
           component: () => import('@/views/processos/DistribuicaoLoteView.vue'),
           meta: {
             roles: ['Protocolador-Chefe', 'Procurador-Chefe'],
+            keepAlive: true,
           },
         },
         {
           path: '/consulta-geral',
           name: 'consulta-geral',
           component: () => import('@/views/processos/ConsultaGeralView.vue'),
-          meta: { requiresAuth: true }
+          meta: { requiresAuth: true, keepAlive: true },
         },
         {
           path: '/diligencias',
           name: 'diligencias',
           component: () => import('@/views/processos/ListagemDiligenciasView.vue'),
+          meta: { keepAlive: true },
         },
         {
           path: 'painel-gerencial',

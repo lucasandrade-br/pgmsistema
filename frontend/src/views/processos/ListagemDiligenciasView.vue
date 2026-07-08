@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onActivated, onMounted, computed } from 'vue'
 import { useRouter }     from 'vue-router'
 import { useToast }      from 'primevue/usetoast'
 import Button      from 'primevue/button'
@@ -132,6 +132,9 @@ async function abrirGerenciador(diligencia) {
 }
 
 onMounted(() => carregarDiligencias(1))
+
+// Atualiza dados silenciosamente ao retornar de uma rota de detalhe
+onActivated(() => carregarDiligencias(1))
 </script>
 
 <template>

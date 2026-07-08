@@ -213,8 +213,15 @@ const navItems = [
   >
     <div class="p-6">
       <!-- Rotas filhas (definidas no router como children de /) são
-           renderizadas aqui pelo Vue Router. -->
-      <RouterView />
+           renderizadas aqui pelo Vue Router.
+           KeepAlive preserva o estado (filtros, paginação) das views de listagem
+           quando o usuário navega para detalhes e retorna. -->
+      <RouterView v-slot="{ Component, route }">
+        <KeepAlive>
+          <component v-if="route.meta.keepAlive" :is="Component" :key="route.name" />
+        </KeepAlive>
+        <component v-if="!route.meta.keepAlive" :is="Component" :key="route.fullPath" />
+      </RouterView>
     </div>
   </main>
 </template>

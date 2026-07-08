@@ -122,7 +122,7 @@ onMounted(carregarResumo)
           <span class="text-sm text-gray-500 mt-2">Análises Concluídas</span>
         </div>
         <RouterLink
-          to="/consulta-geral"
+          :to="{ name: 'analises-pendentes', query: { status: 'CONCLUIDO' } }"
           class="w-full bg-blue-900 hover:bg-blue-950 text-white text-xs font-medium py-2.5 flex items-center justify-center gap-2 transition-colors"
         >
           Monitorar <i class="pi pi-arrow-circle-right" />

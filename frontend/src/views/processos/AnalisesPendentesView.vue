@@ -1,6 +1,6 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onActivated, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
@@ -12,6 +12,7 @@ import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 
 const router    = useRouter()
+const route     = useRoute()
 const toast     = useToast()
 const authStore = useAuthStore()
 
@@ -192,7 +193,15 @@ function onPage(event) {
   carregarProcessos(event.page + 1)
 }
 
-onMounted(() => carregarProcessos(1))
+onMounted(() => {
+  if (route.query.status) {
+    filtros.value.status = route.query.status
+  }
+  carregarProcessos(1)
+})
+
+// Atualiza dados silenciosamente ao retornar de uma rota de detalhe
+onActivated(() => carregarProcessos(1))
 </script>
 
 <template>

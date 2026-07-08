@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onActivated, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
 import Button      from 'primevue/button'
@@ -60,6 +60,9 @@ async function carregarDados() {
 }
 
 onMounted(carregarDados)
+
+// Atualiza dados silenciosamente ao retornar de uma rota de detalhe
+onActivated(carregarDados)
 
 // ── Distribuição ──────────────────────────────────────────────────────────────
 async function submitDistribuicao() {

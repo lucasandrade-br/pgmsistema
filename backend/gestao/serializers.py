@@ -93,6 +93,7 @@ class MovimentacaoSerializer(serializers.ModelSerializer):
                 "numero_documento": a.numero_documento or "",
                 "observacao":       a.observacao or "",
                 "tipo_documento_id": a.tipo_documento_id,
+                "tipo_documento_descricao": a.tipo_documento.descricao if a.tipo_documento else None,
                 "tipo_anexo":       a.tipo_anexo,
             })
         return result

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onActivated, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
 import { useAuthStore } from '@/stores/auth'
@@ -145,6 +145,9 @@ onMounted(async () => {
     console.error('Erro ao carregar dados auxiliares', e)
   }
 })
+
+// Atualiza dados silenciosamente ao retornar de uma rota de detalhe
+onActivated(() => carregarProcessos(1))
 </script>
 
 <template>
