@@ -281,6 +281,12 @@ async function concluirDiligencia() {
     maximizable
     header="Concluir Diligência"
     :style="{ width: '90vw', maxWidth: '1400px' }"
+    :pt="{
+      root:    { class: 'overflow-hidden' },
+      header:  { class: 'bg-green-100 border-b border-green-300' },
+      content: { class: 'bg-green-50' },
+      footer:  { class: 'bg-green-100 border-t border-green-200' },
+    }"
   >
     <div class="flex flex-col gap-4">
       <Textarea

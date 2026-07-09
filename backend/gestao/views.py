@@ -537,6 +537,38 @@ class ProcessoViewSet(viewsets.ModelViewSet):
         enfileirar_tarefa_email(payload)
         return Response({"detail": "E-mail enfileirado com sucesso."}, status=status.HTTP_200_OK)
 
+    @action(detail=False, methods=["post"], url_path="enviar-autos-lote-email")
+    def enviar_autos_lote_email(self, request: Request) -> Response:
+        """
+        POST /api/v1/gestao/processos/enviar-autos-lote-email/
+
+        Envia um único e-mail consolidado com todos os links de autos
+        digitais gerados em uma operação em lote.
+
+        Body: { "email": str, "processos": [{"numero": str, "link": str}] }
+        """
+        LIMITE_LOTE   = 10
+        email_destino = request.data.get("email", "").strip()
+        processos     = request.data.get("processos", [])
+
+        if not email_destino:
+            return Response({"detail": "E-mail é obrigatório."}, status=status.HTTP_400_BAD_REQUEST)
+        if not isinstance(processos, list) or not processos:
+            return Response({"detail": "Lista de processos é obrigatória."}, status=status.HTTP_400_BAD_REQUEST)
+        if len(processos) > LIMITE_LOTE:
+            return Response(
+                {"detail": f"Máximo de {LIMITE_LOTE} processos por solicitação."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        payload = {
+            "tipo_tarefa":   "COMPARTILHAR_AUTOS_LOTE",
+            "email_destino": [email_destino],
+            "processos":     processos,
+        }
+        enfileirar_tarefa_email(payload)
+        return Response({"detail": "E-mail enfileirado com sucesso."}, status=status.HTTP_200_OK)
+
 
 def _montar_arquivos(request: Request) -> list[dict]:
     """
@@ -1050,14 +1082,23 @@ class DashboardViewSet(viewsets.ViewSet):
 
         media_mensal_ano = round(concluidos_365d / 12, 1)
 
+        # ── 5. Total de Processos em Atraso (EM_ANALISE com prazo vencido) ──────
+        # Apenas o count é retornado aqui; a listagem paginada vem do endpoint
+        # gestao/processos/?status=EM_ANALISE&data_limite__lt=<hoje> (PageNumberPagination).
+        total_em_atraso = Processo.objects.filter(
+            data_limite__lt=hoje,
+            status=Processo.Status.EM_ANALISE,
+        ).count()
+
         return Response({
             "kpis": {
                 "total_fila":            total_fila,
                 "gargalo_diligencia":    gargalo_diligencia,
                 "em_analise":            em_analise,
                 "tempo_medio_conclusao": tempo_medio_conclusao,
+                "total_em_atraso":       total_em_atraso,
             },
-            "carga_trabalho": carga_trabalho,
+            "carga_trabalho":  carga_trabalho,
             "produtividade": {
                 "concluidos_30d":   concluidos_30d,
                 "media_mensal_ano": media_mensal_ano,

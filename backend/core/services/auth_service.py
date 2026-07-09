@@ -53,7 +53,7 @@ def request_password_reset(email: str) -> None:
     # Cria o novo token (UUID gerado automaticamente pelo default do campo)
     reset_token = PasswordResetToken.objects.create(user=user)
 
-    reset_link = f"http://localhost:5173/redefinir-senha?token={reset_token.token}"
+    reset_link = f"https://pgm-frontend-app-663822765346.us-central1.run.app/redefinir-senha?token={reset_token.token}"
     payload = {
         "tipo_tarefa":      "REDEFINIR_SENHA",
         "email_destino":    [user.email],

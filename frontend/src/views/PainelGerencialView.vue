@@ -1,7 +1,14 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import Chart from 'primevue/chart'
-import api from '@/services/api'
+import { useRouter }  from 'vue-router'
+import Chart          from 'primevue/chart'
+import DataTable      from 'primevue/datatable'
+import Column         from 'primevue/column'
+import Tag            from 'primevue/tag'
+import Button         from 'primevue/button'
+import api            from '@/services/api'
+
+const router = useRouter()
 
 // ── Estado ──────────────────────────────────────────────────────────────────
 const loading          = ref(true)
@@ -18,7 +25,10 @@ async function carregarDados() {
   }
 }
 
-onMounted(carregarDados)
+onMounted(() => {
+  carregarDados()
+  carregarProcessosEmAtraso(1)
+})
 
 // ── KPIs (atalhos) ───────────────────────────────────────────────────────────
 const kpis = computed(() => dadosGerenciais.value?.kpis ?? {})
@@ -112,6 +122,42 @@ const prodPercentual = computed(() => {
     150,
   )
 })
+
+// ── Processos em Atraso (tabela paginada — busca separada do gerencial) ────────
+const processosEmAtrasoLista = ref([])
+const totalEmAtrasoLista     = ref(0)
+const loadingAtraso          = ref(false)
+
+async function carregarProcessosEmAtraso(page = 1) {
+  loadingAtraso.value = true
+  try {
+    const hoje = new Date().toISOString().slice(0, 10)
+    const { data } = await api.get('gestao/processos/', {
+      params: { status: 'EM_ANALISE', data_limite__lt: hoje, page },
+    })
+    processosEmAtrasoLista.value = data.results ?? []
+    totalEmAtrasoLista.value     = data.count   ?? 0
+  } finally {
+    loadingAtraso.value = false
+  }
+}
+
+function onPageAtraso(event) {
+  carregarProcessosEmAtraso(event.page + 1)
+}
+
+function formatarData(iso) {
+  if (!iso) return '—'
+  const [ano, mes, dia] = iso.substring(0, 10).split('-')
+  return `${dia}/${mes}/${ano}`
+}
+
+function calcularDiasAtraso(dataLimite) {
+  if (!dataLimite) return 0
+  const hoje   = new Date(); hoje.setHours(0, 0, 0, 0)
+  const limite = new Date(dataLimite + 'T00:00:00')
+  return Math.max(0, Math.floor((hoje - limite) / 86400000))
+}
 </script>
 
 <template>
@@ -295,6 +341,105 @@ const prodPercentual = computed(() => {
         </template>
 
       </div>
+    </div>
+
+    <!-- ── Tabela: Processos em Atraso ──────────────────────────────────── -->
+    <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+
+      <!-- Cabeçalho do card -->
+      <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+        <div>
+          <h2 class="text-sm font-semibold text-gray-700">Processos em Atraso</h2>
+          <p class="text-xs text-gray-400 mt-0.5">Processos Em Análise com prazo vencido</p>
+        </div>
+        <span
+          v-if="!loading && kpis.total_em_atraso"
+          class="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-2 rounded-full bg-red-100 text-red-700 text-xs font-bold"
+        >
+          {{ kpis.total_em_atraso }}
+        </span>
+      </div>
+
+      <!-- Skeleton: carregamento inicial da tabela -->
+      <div v-if="loadingAtraso && !processosEmAtrasoLista.length" class="p-6">
+        <div class="h-48 bg-gray-100 rounded animate-pulse" />
+      </div>
+
+      <!-- Estado vazio: tudo em dia -->
+      <div
+        v-else-if="!loadingAtraso && !processosEmAtrasoLista.length"
+        class="flex flex-col items-center justify-center gap-2 py-12 text-gray-400"
+      >
+        <i class="pi pi-check-circle text-3xl text-green-400" />
+        <p class="text-sm">Nenhum processo em atraso. Equipe em dia!</p>
+      </div>
+
+      <!-- Tabela paginada (lazy) -->
+      <DataTable
+        v-else
+        :value="processosEmAtrasoLista"
+        :loading="loadingAtraso"
+        lazy
+        :paginator="true"
+        :rows="20"
+        :totalRecords="totalEmAtrasoLista"
+        @page="onPageAtraso"
+        paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport"
+        currentPageReportTemplate="{first}–{last} de {totalRecords} processos"
+        :rowHover="true"
+        stripedRows
+        responsiveLayout="scroll"
+        emptyMessage="Nenhum processo em atraso encontrado."
+        class="text-sm"
+      >
+        <Column header="Nº Origem / SEI" style="min-width: 12rem">
+          <template #body="{ data }">
+            <div class="flex flex-col">
+              <span class="text-gray-800 font-medium">{{ data.numero_origem || '—' }}</span>
+              <span v-if="data.numero_sei" class="text-xs text-gray-500 mt-0.5">{{ data.numero_sei }}</span>
+            </div>
+          </template>
+        </Column>
+
+        <Column header="Tipo de Processo" style="min-width: 13rem">
+          <template #body="{ data }">
+            <span class="text-gray-700">{{ data.tipo_processo_descricao ?? '—' }}</span>
+          </template>
+        </Column>
+
+        <Column header="Procurador Atribuído" style="min-width: 12rem">
+          <template #body="{ data }">
+            <span :class="data.procurador_nome ? 'text-gray-700' : 'text-gray-400 italic'">
+              {{ data.procurador_nome ?? 'Não atribuído' }}
+            </span>
+          </template>
+        </Column>
+
+        <Column header="Data Limite / Atraso" style="min-width: 11rem">
+          <template #body="{ data }">
+            <div class="flex flex-col">
+              <span class="font-medium text-red-600">{{ formatarData(data.data_limite) }}</span>
+              <span class="text-xs text-red-400 mt-0.5">
+                {{ calcularDiasAtraso(data.data_limite) }}
+                {{ calcularDiasAtraso(data.data_limite) === 1 ? 'dia' : 'dias' }} em atraso
+              </span>
+            </div>
+          </template>
+        </Column>
+
+        <Column header="Ações" style="min-width: 6rem" alignFrozen="right">
+          <template #body="{ data }">
+            <Button
+              label="Acessar"
+              icon="pi pi-folder-open"
+              text
+              class="!bg-blue-50 hover:!bg-blue-100 !text-blue-700 !text-xs font-medium !py-1.5 !px-3 rounded-lg transition-colors"
+              @click="router.push({ name: 'detalhes-processo', params: { id: data.id } })"
+            />
+          </template>
+        </Column>
+      </DataTable>
+
     </div>
 
   </div>

@@ -46,11 +46,12 @@ RUN pip install --no-cache-dir /wheels/*
 # Copia o código da aplicação
 COPY . .
 
-# collectstatic com DEBUG=True para STATIC_ROOT ficar disponível sem banco de dados
 # (STATIC_ROOT é definido incondicionalmente no settings.py)
+# collectstatic com DEBUG=False para forçar a criação do manifesto do WhiteNoise
 RUN DATABASE_URL=sqlite:///dummy.db \
     SECRET_KEY=dummy_key_build \
-    DEBUG=True \
+    DEBUG=False \
+    GS_BUCKET_NAME=dummy_bucket \
     python manage.py collectstatic --noinput
 
 # Remove o sqlite de build — não deve existir na imagem final

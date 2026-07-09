@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from django.contrib.auth import get_user_model
+from django.db.models import F, Max
 
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView as _BaseTokenObtainPairView
@@ -14,7 +15,24 @@ from core.services.auth_service import TokenInvalidoError, confirm_password_rese
 # ── JWT com claim de grupos ────────────────────────────────────────────────────
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
-    """Adiciona o claim 'grupos' ao JWT para RBAC no frontend."""
+    """Adiciona o claim 'grupos' ao JWT para RBAC no frontend.
+
+    Suporta login tanto por nome de usuário quanto por e-mail: se o
+    campo identificador contiver '@', resolve o e-mail para o username
+    correspondente antes de delegar a autenticação ao pipeline do
+    simplejwt — a verificação de senha permanece integralmente no Django.
+    """
+
+    def validate(self, attrs):
+        identifier = attrs.get(self.username_field, '')
+        if '@' in identifier:
+            User = get_user_model()
+            try:
+                user = User.objects.get(email__iexact=identifier)
+                attrs[self.username_field] = user.username
+            except User.DoesNotExist:
+                pass  # Deixa o pipeline retornar credenciais inválidas normalmente
+        return super().validate(attrs)
 
     @classmethod
     def get_token(cls, user):
@@ -53,7 +71,8 @@ class ProcuradoresListView(APIView):
         qs = (
             User.objects
             .filter(groups__name="Procuradores", is_active=True)
-            .order_by("first_name", "last_name", "username")
+            .annotate(ultima_atribuicao=Max('processos_atribuidos__data_atribuicao'))
+            .order_by(F('ultima_atribuicao').asc(nulls_first=True))
         )
         data = [
             {

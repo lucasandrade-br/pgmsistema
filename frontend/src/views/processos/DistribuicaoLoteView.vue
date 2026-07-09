@@ -32,7 +32,28 @@ const labelBotao = computed(() => {
     ? `Distribuir ${n} Processo${n !== 1 ? 's' : ''}`
     : 'Distribuir Processos'
 })
+// Top-4 procuradores com maior tempo sem atribuição (já vem ordenado pela API)
+const filaDistribuicao = computed(() => procuradores.value.slice(0, 4))
 
+// Procuradores selecionados mantendo a ordem da API (idle-time order)
+const procuradoresSelecionadosOrdenados = computed(() => {
+  const selectedIds = new Set(procuradoresSelecionados.value.map(p => p.id))
+  return procuradores.value.filter(p => selectedIds.has(p.id))
+})
+
+// Simula o round-robin e retorna a quantidade de processos por procurador
+const previewDistribuicao = computed(() => {
+  const n = processosSelecionados.value.length
+  const lista = procuradoresSelecionadosOrdenados.value
+  const m = lista.length
+  if (n === 0 || m === 0) return []
+  const base  = Math.floor(n / m)
+  const extra = n % m
+  return lista.map((p, i) => ({
+    nome:       p.nome,
+    quantidade: base + (i < extra ? 1 : 0),
+  }))
+})
 // ── Carregamento de dados ──────────────────────────────────────────────────────
 async function carregarDados() {
   isLoading.value = true
@@ -144,6 +165,17 @@ function formatarData(data) {
 
     <!-- ── Toolbar de controle ─────────────────────────────────────────────── -->
     <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+      <!-- Fila de distribuição: top-4 com maior tempo sem atribuição -->
+      <div v-if="filaDistribuicao.length" class="mb-3 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-gray-500">
+        <span class="flex items-center gap-1 font-semibold text-gray-600">
+          <i class="pi pi-sort-amount-up text-gray-400" />
+          Fila de distribuição:
+        </span>
+        <template v-for="(p, i) in filaDistribuicao" :key="p.id">
+          <span class="text-gray-700">{{ i + 1 }}. {{ p.nome }}</span>
+          <span v-if="i < filaDistribuicao.length - 1" class="text-gray-300">|</span>
+        </template>
+      </div>
       <Toolbar class="border-0 p-0 bg-transparent">
 
         <template #start>
@@ -179,6 +211,31 @@ function formatarData(data) {
       </Toolbar>
     </div>
 
+    <!-- ── Preview de distribuição ───────────────────────────────────────────── -->
+    <Transition name="fade">
+      <div
+        v-if="previewDistribuicao.length"
+        class="bg-blue-50 border border-blue-100 rounded-xl p-4"
+      >
+        <p class="text-xs font-semibold text-blue-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+          <i class="pi pi-eye" /> Preview da distribuição
+        </p>
+        <div class="flex flex-wrap gap-3">
+          <div
+            v-for="(item, i) in previewDistribuicao"
+            :key="item.nome"
+            class="flex items-center gap-2 bg-white border border-blue-100 rounded-lg px-3 py-2 text-sm shadow-sm"
+          >
+            <span class="text-xs font-bold text-blue-300">{{ i + 1 }}.</span>
+            <span class="font-medium text-gray-800">{{ item.nome }}</span>
+            <span class="ml-1 bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-0.5 rounded-full">
+              {{ item.quantidade }}&nbsp;processo{{ item.quantidade !== 1 ? 's' : '' }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
     <!-- ── Tabela de processos ─────────────────────────────────────────────── -->
     <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
       <DataTable
@@ -186,7 +243,7 @@ function formatarData(data) {
         v-model:selection="processosSelecionados"
         dataKey="id"
         paginator
-        :rows="20"
+        :rows="50"
         :rowsPerPageOptions="[10, 20, 50]"
         paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink RowsPerPageDropdown"
         :loading="isLoading"

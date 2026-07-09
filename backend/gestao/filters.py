@@ -34,6 +34,7 @@ class ProcessoFilter(django_filters.FilterSet):
             "status":               ["exact", "in"],
             "procurador_atribuido": ["exact"],
             "tipo_processo":        ["exact"],
+            "data_limite":          ["lt"],   # usado pelo Painel Gerencial para filtrar processos em atraso
         }
 
     def filter_numeracao(self, queryset, name, value):

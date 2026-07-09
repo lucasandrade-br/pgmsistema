@@ -1,0 +1,16 @@
+# Dependências instaladas localmente
+node_modules/
+
+# Pastas de build locais
+dist/
+dist-ssr/
+
+# Arquivos de ambiente locais
+.env
+.env.local
+.env.development
+# (O .env.production DEVE subir, então NÃO coloque ele aqui)
+
+# Histórico de versão
+.git/
+.gitignore

@@ -41,3 +41,33 @@ class MovimentacaoAdmin(admin.ModelAdmin):
         "descricao",
     )
     list_filter = ("tipo_evento", "data_criacao")
+
+
+@admin.register(Anexo)
+class AnexoAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "processo",
+        "tipo_anexo",
+        "tipo_documento",
+        "numero_documento",
+        "ativo",
+        "movimentacao",
+    )
+    list_filter = ("tipo_anexo", "ativo", "tipo_documento")
+    search_fields = (
+        "processo__numero_protocolo",
+        "numero_documento",
+        "observacao",
+    )
+    readonly_fields = ("movimentacao", "processo")
+    fields = (
+        "processo",
+        "movimentacao",
+        "tipo_anexo",
+        "tipo_documento",
+        "numero_documento",
+        "arquivo",
+        "observacao",
+        "ativo",
+    )

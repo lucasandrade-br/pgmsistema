@@ -1,0 +1,17 @@
+# Ambientes virtuais e pacotes locais
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Arquivos de ambiente e segredos
+.env
+.env.*
+*.sqlite3
+dummy.db
+dummy_legado.db
+
+# Histórico de versão
+.git/
+.gitignore

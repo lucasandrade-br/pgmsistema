@@ -59,6 +59,7 @@ const tipoMovimentacao         = ref('Anexo')
 const gerandoAutos          = ref(false)
 const modalAutosVisivel     = ref(false)
 const linkCompartilhamento  = ref('')
+const urlDownloadAutos      = ref('')
 const emailDestino          = ref('')
 const enviandoEmail         = ref(false)
 const descricaoDiligencia      = ref('')
@@ -80,6 +81,17 @@ const anexosGlobais = computed(() => {
     if (m.anexos) todos.push(...m.anexos.filter(a => a.url))
   })
   return todos
+})
+
+// Passthrough do modal de movimentação: âmbar quando em modo "Iniciar Diligência"
+const ptModalAnexo = computed(() => {
+  if (tipoMovimentacao.value !== 'Iniciar Diligência') return {}
+  return {
+    root:    { class: 'overflow-hidden' },
+    header:  { class: 'bg-amber-100 border-b border-amber-300' },
+    content: { class: 'bg-amber-50' },
+    footer:  { class: 'bg-amber-100 border-t border-amber-200' },
+  }
 })
 
 // ══════════════════ RBAC e Validações ══════════════════════════    
@@ -454,6 +466,7 @@ async function gerarAutos() {
   try {
     const { data } = await api.post(`gestao/processos/${processo.value.id}/gerar-link/`)
     linkCompartilhamento.value = `${window.location.origin}/autos/${data.token}`
+    urlDownloadAutos.value = data.url_publica || ''
     modalAutosVisivel.value = true
   } catch {
     toast.add({
@@ -484,6 +497,19 @@ function enviarWhatsApp() {
     linkCompartilhamento.value
   )
   window.open(`https://api.whatsapp.com/send?text=${texto}`, '_blank')
+}
+
+function baixarAutos() {
+  const url = urlDownloadAutos.value
+  if (!url) return
+  const a = document.createElement('a')
+  a.href = url
+  a.download = ''
+  a.target = '_blank'
+  a.rel = 'noopener noreferrer'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
 }
 
 async function enviarEmailAutos() {
@@ -690,6 +716,15 @@ function confirmarExclusao() {
           @click="exibirModalAnexo = true"
         />
 
+        <!-- Indicador de geração de autos digitais em andamento -->
+        <div
+          v-if="gerandoAutos"
+          class="flex items-center gap-1.5 text-xs text-gray-500 bg-gray-200 rounded-full px-3 py-1"
+        >
+          <i class="pi pi-spin pi-spinner text-gray-400" />
+          <span>Gerando PDF...</span>
+        </div>
+
         <!-- Kebab menu: ações secundárias (Devolver, Arquivar, Editar...) -->
         <Button
           v-if="itensMenuSecundario.length > 0"
@@ -698,6 +733,7 @@ function confirmarExclusao() {
           text
           severity="secondary"
           size="small"
+          :disabled="gerandoAutos"
           aria-haspopup="true"
           aria-controls="overlay_menu_acoes"
           @click="toggleMenuAcoes"
@@ -946,23 +982,31 @@ function confirmarExclusao() {
     <!--
       maximizable + 90vw garantem que o WorkspaceAnexos tenha altura
       suficiente para leitura confortável do PDF no visualizador.
+      ptModalAnexo: header/content/footer ficam âmbar ao selecionar "Iniciar Diligência".
     -->
     <Dialog
       v-model:visible="exibirModalAnexo"
       modal
       maximizable
-      header="Adicionar Movimentação"
+      :pt="ptModalAnexo"
       :style="{ width: '90vw', maxWidth: '1400px' }"
       :breakpoints="{ '640px': '98vw' }"
     >
-      <!-- Seletor de tipo de movimentação -->
-      <div class="mb-4 pb-4 border-b border-gray-100 flex flex-col gap-3">
-        <SelectButton
-          v-model="tipoMovimentacao"
-          :options="['Anexo', 'Iniciar Diligência']"
-        />
+      <!-- Título + seletor de tipo lado a lado no cabeçalho -->
+      <template #header>
+        <div class="flex items-center gap-4 flex-1 min-w-0">
+          <span class="font-semibold text-base shrink-0">Adicionar Movimentação</span>
+          <SelectButton
+            v-model="tipoMovimentacao"
+            :options="['Anexo', 'Iniciar Diligência']"
+            size="small"
+          />
+        </div>
+      </template>
+
+      <!-- Descrição da diligência (somente ao iniciar diligência) -->
+      <div v-if="tipoMovimentacao === 'Iniciar Diligência'" class="mb-4 pb-4 border-b border-amber-200">
         <Textarea
-          v-if="tipoMovimentacao === 'Iniciar Diligência'"
           v-model="descricaoDiligencia"
           :rows="3"
           placeholder="Descreva a necessidade da diligência..."
@@ -1156,6 +1200,12 @@ function confirmarExclusao() {
             icon="pi pi-whatsapp"
             severity="success"
             @click="enviarWhatsApp"
+          />
+          <Button
+            label="Baixar"
+            icon="pi pi-download"
+            severity="info"
+            @click="baixarAutos"
           />
         </div>
 

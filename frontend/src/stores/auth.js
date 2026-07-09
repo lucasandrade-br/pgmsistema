@@ -15,6 +15,17 @@ function _decodeUser(token) {
 
 export const useAuthStore = defineStore('auth', {
   state: () => {
+    // ── Suporte a abertura em nova aba ───────────────────────────────────────
+    // Quando outra aba abre esta via window.open, ela deposita o token em
+    // localStorage._new_tab_token antes de chamar window.open.
+    // Aqui consumimos essa chave de uso único e armazenamos no sessionStorage
+    // desta aba para que refreshes subsequentes também funcionem.
+    const newTabToken = localStorage.getItem('_new_tab_token')
+    if (newTabToken) {
+      localStorage.removeItem('_new_tab_token')   // consume imediatamente
+      sessionStorage.setItem('token', newTabToken) // persiste para esta aba
+    }
+
     // Hidratação: ao recarregar a página (F5) o token é restaurado do
     // storage escolhido durante o login.
     //   localStorage   → "Lembrar meu acesso" marcado (persiste entre abas e fechamentos)

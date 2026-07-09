@@ -18,6 +18,7 @@ from typing import Any
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.db.models import F, Max
 from django.utils import timezone
 
 from gestao.models import Anexo, Movimentacao, Processo
@@ -277,15 +278,18 @@ class ProcessoService:
                 "Atualize a listagem e tente novamente."
             )
 
-        # Carrega os procuradores para montar a fila Round-Robin.
-        # Mantemos a mesma ordem dos IDs recebidos para comportamento previsível.
-        procuradores_map = {u.id: u for u in User.objects.filter(id__in=procuradores_ids)}
-        if len(procuradores_map) != total_procuradores:
+        # Carrega os procuradores ordenados pelo maior tempo sem atribuição (fila justa).
+        # Procuradores sem nenhuma atribuição prévia aparecem primeiro (NULLS FIRST).
+        # A ordem é determinada pelo backend, independentemente da ordem enviada pelo frontend.
+        procuradores = list(
+            User.objects.filter(id__in=procuradores_ids)
+            .annotate(ultima_atribuicao=Max('processos_atribuidos__data_atribuicao'))
+            .order_by(F('ultima_atribuicao').asc(nulls_first=True))
+        )
+        if len(procuradores) != total_procuradores:
             raise DistribuicaoError(
                 "Um ou mais procuradores informados não foram encontrados."
             )
-        # Reconstrói a lista na ordem original dos IDs para garantir Round-Robin determinístico
-        procuradores = [procuradores_map[pk] for pk in procuradores_ids]
 
         processos_atualizados: list[Processo] = []
 

@@ -137,6 +137,37 @@ def _enviar_compartilhamento_autos(payload: dict) -> None:
     logger.info("[Email Worker] E-mail de compartilhamento de autos enviado para %s.", email_destino)
 
 
+def _enviar_compartilhamento_autos_lote(payload: dict) -> None:
+    """
+    Renderiza e despacha um único e-mail consolidado com os links de todos os
+    autos digitais gerados em lote.
+    """
+    email_destino = payload.get("email_destino", [])
+    processos     = payload.get("processos", [])   # lista de {numero, link}
+
+    context = {
+        "processos":        processos,
+        "quantidade":       len(processos),
+        "titulo_cabecalho": "Autos Digitais em Lote",
+    }
+    html_content = render_to_string("emails/compartilhamento_autos_lote.html", context)
+    text_content = strip_tags(html_content)
+
+    msg = EmailMultiAlternatives(
+        subject=f"Autos Digitais — {len(processos)} processo(s)",
+        body=text_content,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=email_destino,
+    )
+    msg.attach_alternative(html_content, "text/html")
+    msg.send(fail_silently=False)
+    logger.info(
+        "[Email Worker] E-mail de autos em lote enviado para %s (%d processo(s)).",
+        email_destino,
+        len(processos),
+    )
+
+
 def _enviar_atribuicao_lote(payload: dict) -> None:
     """
     Renderiza e despacha um único e-mail por procurador com a lista dos
@@ -294,8 +325,9 @@ def worker_processar_email(payload: dict) -> None:
     _handlers = {
         "ENVIAR_EMAIL_DILIGENCIA": _enviar_diligencia,
         "REDEFINIR_SENHA":         _enviar_redefinicao_senha,
-        "COMPARTILHAR_AUTOS":      _enviar_compartilhamento_autos,
-        "ATRIBUICAO_LOTE":         _enviar_atribuicao_lote,
+        "COMPARTILHAR_AUTOS":       _enviar_compartilhamento_autos,
+        "COMPARTILHAR_AUTOS_LOTE":  _enviar_compartilhamento_autos_lote,
+        "ATRIBUICAO_LOTE":          _enviar_atribuicao_lote,
         "COBRANCA_ATRASOS":        _enviar_cobranca_atrasos,
         "COBRANCA_CHEFIA":         _enviar_cobranca_chefia,
         "CONCLUSAO_DILIGENCIA":    _enviar_conclusao_diligencia,
@@ -349,7 +381,7 @@ def enfileirar_tarefa_email(payload: dict) -> None:
         - Adicionar CLOUD_TASKS_QUEUE_NAME e CLOUD_TASKS_SERVICE_URL ao .env.
         - Configurar autenticação OIDC na task para o endpoint interno.
     """
-    # Em ambiente de desenvolvimento, executa o envio SMTP de forma síncrona
-    # sem precisar do emulador GCP.
-    if settings.DEBUG:
-        worker_processar_email(payload)
+    # Executa o envio SMTP de forma síncrona.
+    # TODO (Sprint de Deploy): substituir pelo cliente real do Cloud Tasks para
+    # processamento assíncrono em produção (ver docstring acima).
+    worker_processar_email(payload)

@@ -77,7 +77,6 @@ function onPdfRendered() {
   if (!baseWidth.value && scrollContainer.value) {
     baseWidth.value = scrollContainer.value.clientWidth || 800
   }
-  isLoadingPdf.value = false
 }
 
 // ── Fetch do PDF como Blob (bypassa X-Frame-Options) ─────────────────────────
@@ -96,7 +95,8 @@ async function carregarPdf(url) {
   // Blob local (ex: preview de arquivo arrastado no WorkspaceAnexos) — usa direto
   if (url.startsWith('blob:')) {
     localBlobUrl.value = url
-    return  // isLoadingPdf fica true até @rendered disparar
+    isLoadingPdf.value = false  // libera o overlay; VuePdfEmbed renderiza progressivamente
+    return
   }
 
   // URL remota — fetch autenticado via Axios (JWT no header)
@@ -104,7 +104,7 @@ async function carregarPdf(url) {
     const response     = await api.get(url, { responseType: 'blob' })
     _ownedBlobUrl      = URL.createObjectURL(response.data)
     localBlobUrl.value = _ownedBlobUrl
-    // isLoadingPdf permanece true até @rendered disparar
+    isLoadingPdf.value = false  // libera o overlay; VuePdfEmbed renderiza progressivamente
   } catch {
     toast.add({
       severity: 'error',

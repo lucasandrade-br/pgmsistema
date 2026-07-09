@@ -7,9 +7,8 @@ const token = route.params.token
 
 onMounted(() => {
   setTimeout(() => {
-    // A baseURL da API (ex.: http://localhost:8000/api/v1/) já inclui a barra;
-    // VITE_API_URL deve terminar em /api/v1/ para consistência com api.js.
-    const base = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1/'
+    // Usa a mesma variável de api.js para consistência
+    const base = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1/'
     window.location.href = `${base}publico/link/${token}`
   }, 1500)
 })

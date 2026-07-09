@@ -75,15 +75,30 @@ async function handleLogin() {
           <p class="mt-1 text-sm text-gray-500">Entre com suas credenciais para acessar o sistema.</p>
         </div>
 
+        <!-- Banner: Atualização do sistema -->
+        <div class="mb-6 flex gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          <i class="pi pi-megaphone mt-0.5 shrink-0 text-amber-500" style="font-size: 1.1rem;" />
+          <div>
+            <p class="font-semibold leading-snug">Sistema atualizado!</p>
+            <p class="mt-0.5 leading-relaxed text-amber-700">
+              Primeiro acesso? Clique em
+              <RouterLink to="/esqueci-a-senha" class="font-semibold underline underline-offset-2 hover:text-amber-900">
+                Esqueceu sua senha?
+              </RouterLink>
+              para redefinir sua senha com segurança e acessar o sistema.
+            </p>
+          </div>
+        </div>
+
         <!-- Formulário -->
         <form @submit.prevent="handleLogin" class="flex flex-col gap-4" novalidate>
 
           <div class="flex flex-col gap-1.5">
-            <label for="username" class="text-sm font-medium text-gray-700">Usuário</label>
+            <label for="username" class="text-sm font-medium text-gray-700">Usuário ou E-mail</label>
             <InputText
               id="username"
               v-model="username"
-              placeholder="Digite seu usuário"
+              placeholder="Digite seu usuário ou e-mail"
               autocomplete="username"
               class="w-full"
             />

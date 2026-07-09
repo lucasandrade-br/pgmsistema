@@ -186,17 +186,18 @@ STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 MEDIA_URL  = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+# Segurança e Proxy (Cloud Run fica atrás do load balancer do Google)
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+# Origins confiáveis para CSRF (domínios de produção separados por vírgula no .env)
+CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=["https://pgm-backend-api-663822765346.southamerica-east1.run.app"])
+
 # ── Configurações de Produção (Cloud Run + GCS) ──────────────────────────────
 if not DEBUG:
-    # Segurança e Proxy (Cloud Run fica atrás do load balancer do Google)
-    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
     USE_X_FORWARDED_HOST = True
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
-
-    # Origins confiáveis para CSRF (domínios de produção separados por vírgula no .env)
-    CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
 
     # Arquivos estáticos: WhiteNoise com compressão e hash de cache-busting
     STORAGES = {
@@ -204,16 +205,43 @@ if not DEBUG:
             "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
         },
         # Arquivos de mídia (anexos): Google Cloud Storage
-        # Requer: django-storages[google] google-auth google-cloud-storage
-        # GS_DEFAULT_ACL = None → arquivos privados com URL assinada (correto para docs jurídicos)
+        # GS_DEFAULT_ACL = None → arquivos privados com URL assinada
         "default": {
             "BACKEND": "storages.backends.gcloud.GoogleCloudStorage",
         },
     }
-    GS_BUCKET_NAME  = env("GS_BUCKET_NAME", default="")
-    GS_DEFAULT_ACL  = None          # privado; use GS_QUERYSTRING_AUTH=True para URLs assinadas
+
+    # 1. E-mail da conta de serviço do Cloud Run
+    target_email = '663822765346-compute@developer.gserviceaccount.com'
+
+    # 2. Credenciais Personificadas para URLs assinadas
+    # Envolvida em try/except: google-auth só está disponível em runtime
+    # (Cloud Run), não durante o `collectstatic` do build da imagem Docker.
+    try:
+        from google.auth import default
+        try:
+            from google.auth import impersonated_credentials
+
+            base_creds, _ = default()
+            GS_CREDENTIALS = impersonated_credentials.Credentials(
+                source_credentials=base_creds,
+                target_principal=target_email,
+                target_scopes=["https://www.googleapis.com/auth/cloud-platform"],
+            )
+        except ImportError:
+            GS_CREDENTIALS, _ = default()
+    except ImportError:
+        # Build-time: google-auth não disponível — collectstatic não usa GCS
+        GS_CREDENTIALS = None
+
+    # 3. Parâmetros do Storage
+    GS_SERVICE_ACCOUNT_EMAIL = target_email
+    GS_BUCKET_NAME      = env("GS_BUCKET_NAME", default="pge-sistema-media-files")
+    GS_DEFAULT_ACL      = None   # privado; URLs assinadas via GS_QUERYSTRING_AUTH
     GS_QUERYSTRING_AUTH = True
-    GS_EXPIRATION   = 3600          # URL assinada expira em 1 hora
+    GS_EXPIRATION       = 3600   # URL assinada expira em 1 hora
+
+
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
